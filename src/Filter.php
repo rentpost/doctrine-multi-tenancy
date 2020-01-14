@@ -238,8 +238,6 @@ class Filter extends SQLFilter
             $whereClauses[] = $this->parseWhereClause($filter->getWhereClause(), $identifiers, $values);
         }
 
-        debug($whereClauses);
-
         return implode(' AND ', $whereClauses);
     }
 }
