@@ -90,7 +90,8 @@ class Filter extends SQLFilter
     protected function getDefaultMap(string $targetTableAlias): array
     {
         return [
-            '$this' => $targetTableAlias,
+            '/\$this/' => $targetTableAlias,
+            '/\\n\s+\*/' => '', // Regex pattern to replace: \n *
         ];
     }
 
@@ -107,7 +108,7 @@ class Filter extends SQLFilter
             $this->identifiers = array_keys($this->getListener()->getValueHolders());
             foreach ($this->identifiers as &$identifier) {
                 // Add braces to prevent replacing unwanted syntax
-                $identifier = '{' . $identifier . '}';
+                $identifier = '/\{' . $identifier . '\}/';
             }
 
             $this->values = array_values($this->getListener()->getValueHolders());
@@ -173,7 +174,7 @@ class Filter extends SQLFilter
      */
     protected function parseWhereClause(string $filter, array $identifiers, array $values): string
     {
-        return \str_replace($identifiers, $values, $filter);
+        return \preg_replace($identifiers, $values, $filter);
     }
 
 
@@ -236,6 +237,8 @@ class Filter extends SQLFilter
 
             $whereClauses[] = $this->parseWhereClause($filter->getWhereClause(), $identifiers, $values);
         }
+
+        debug($whereClauses);
 
         return implode(' AND ', $whereClauses);
     }
