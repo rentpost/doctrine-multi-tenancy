@@ -1,0 +1,23 @@
+{
+    "name": "rentpost/doctrine-multi-tenancy-extension",
+    "type": "library",
+    "description": "Advanced Doctrine2 multi-tenancy extension",
+    "homepage": "https://github.com/rentpost/doctrine-multi-tenancy-extension",
+    "license": "MIT",
+    "authors": [
+        {
+            "name": "Jacob Thomason",
+            "email": "jacob@rentpost.com"
+        }
+    ],
+    "require": {
+        "php":                          ">=7.2.0",
+        "doctrine/common":              "^2.11",
+        "doctrine/orm":                 "~2.7"
+    },
+    "autoload": {
+        "psr-4": {
+            "Rentpost\\Doctrine\\MultiTenancy": "src/"
+        }
+    }
+}

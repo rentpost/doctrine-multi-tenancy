@@ -1,2 +1,3 @@
-# doctrine-multi-tenancy-extension
-Extension for Doctrine 2 providing advanced multi-tenancy support
+# Doctrine 2 MultiTenancy Extension
+
+Extension for Doctrine 2 providing advanced multi-tenancy support.
