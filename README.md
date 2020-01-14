@@ -1,4 +1,4 @@
-# Doctrine Advanced MultiTenancy Extension
+# Doctrine MultiTenancy
 
 Doctrine 2 extension providing advanced multi-tenancy support.  The purpose of this extension is to allow flexibility in how multi-tenancy is defined on a per entity basis, as well as within contexts.
 
@@ -108,7 +108,7 @@ Using the `Admin` example above, we might return `admin` as an "identifier".  Th
 
 As with the `ValueHolder`, this will all be more clear when viewing the example annotation below.
 
-#### Advanced Setup *(recommended)*
+#### Additional Setup *(recommended)*
 
 We also recommend using the cached annotation reader with the MultiTenancy extension.  This is important since the annotations are used for every entity SQL query.
 
@@ -121,7 +121,7 @@ $entityManager->getFilters()
 
 ## Usage
 
-After you've gotten everything setup, the hard part is out of the way.  Taking the time to properly evaludate how you'll setup your `ValueHolder`s and `ContextProvider`s will go a long way in making the usage clean and simple.
+After you've gotten everything setup, the hard part is out of the way.  Taking the time to properly evaludate how you'll setup your `ValueHolder` and `ContextProvider` classes will go a long way in making the usage clean and simple.
 
 ### Examples
 
@@ -145,9 +145,7 @@ use Rentpost\Doctrine\MultiTenancy\Annotation\MultiTenancy;
  * @ORM\Entity
  *
  * @MultiTenancy(filters={
- *      @MultiTenancy\Filter(
- *          where="$this.company_id = {companyId})"
- *      )
+ *      @MultiTenancy\Filter(where="$this.company_id = {companyId})")
  * })
  */
 class Product
