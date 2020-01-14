@@ -1,5 +1,5 @@
 {
-    "name": "rentpost/doctrine-multi-tenancy-extension",
+    "name": "rentpost/doctrine-multi-tenancy",
     "type": "library",
     "description": "Advanced Doctrine2 multi-tenancy extension",
     "homepage": "https://github.com/rentpost/doctrine-multi-tenancy-extension",
