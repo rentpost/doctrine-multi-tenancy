@@ -22,8 +22,6 @@ class Filter extends SQLFilter
     protected ?Listener $listener = null;
     protected ?EntityManagerInterface $entityManager = null;
     protected ?Reader $annotationReader = null;
-    protected array $identifiers = [];
-    protected array $values = [];
 
 
     /**
@@ -103,24 +101,18 @@ class Filter extends SQLFilter
      */
     protected function getValueHolderIdentifiersAndValues(): array
     {
-        // If we have elements in these arrays, they've been populated, return the cache
-        if (!count($this->identifiers) || !count($this->values)) {
-            $this->identifiers = array_keys($this->getListener()->getValueHolders());
-            foreach ($this->identifiers as &$identifier) {
-                // Add braces to prevent replacing unwanted syntax
-                $identifier = '/\{' . $identifier . '\}/';
-            }
-
-            $this->values = array_values($this->getListener()->getValueHolders());
-            foreach ($this->values as &$value) {
-                $value = $value->getValue();
-            }
+        $identifiers = array_keys($this->getListener()->getValueHolders());
+        foreach ($identifiers as &$identifier) {
+            // Add braces to prevent replacing unwanted syntax
+            $identifier = '/\{' . $identifier . '\}/';
         }
 
-        return [
-            $this->identifiers,
-            $this->values,
-        ];
+        $values = array_values($this->getListener()->getValueHolders());
+        foreach ($values as &$value) {
+            $value = $value->getValue();
+        }
+
+        return [$identifiers, $values];
     }
 
 
