@@ -18,7 +18,7 @@ use Doctrine\Common\Annotations\Annotation\Target;
 final class MultiTenancy
 {
 
-    protected bool $enable;
+    protected bool $isEnabled;
     protected array $filters;
 
 
@@ -29,7 +29,7 @@ final class MultiTenancy
      */
     public function __construct(array $values)
     {
-        $this->enable = $values['enable'] ?? true;
+        $this->enable = $values['enable'] ?? $values['enabled'] ?? true;
         $this->filters = $values['filters'] ?? [];
     }
 
@@ -39,7 +39,7 @@ final class MultiTenancy
      */
     public function isEnabled(): bool
     {
-        return $this->enable;
+        return $this->isEnabled;
     }
 
 
