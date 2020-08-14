@@ -29,7 +29,7 @@ final class MultiTenancy
      */
     public function __construct(array $values)
     {
-        $this->enable = $values['enable'] ?? $values['enabled'] ?? true;
+        $this->isEnabled = $values['enable'] ?? $values['enabled'] ?? true;
         $this->filters = $values['filters'] ?? [];
     }
 
