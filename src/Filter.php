@@ -215,7 +215,10 @@ class Filter extends SQLFilter
 
         $filters = $multiTenancy->getFilters();
         if (!$filters) {
-            return '';
+            throw new \LogicException(sprintf(
+                '%s is enabled for MultiTenancy, but there were not any added filters.',
+                $targetEntity->rootEntityName,
+            ));
         }
 
         $defaultMap = $this->getDefaultMap($targetTableAlias);
