@@ -145,7 +145,7 @@ use Rentpost\Doctrine\MultiTenancy\Annotation\MultiTenancy;
  * @ORM\Entity
  *
  * @MultiTenancy(filters={
- *      @MultiTenancy\Filter(where="$this.company_id = {companyId})")
+ *      @MultiTenancy\Filter(where="$this.company_id = {companyId}")
  * })
  */
 class Product
