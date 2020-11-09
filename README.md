@@ -169,7 +169,7 @@ use Rentpost\Doctrine\MultiTenancy\Annotation\MultiTenancy;
  *
  * @MultiTenancy(filters={
  *      @MultiTenancy\Filter(
- *          where="$this.company_id = {companyId})"
+ *          where="$this.company_id = {companyId}"
  *      ),
  *      @MultiTenancy\Filter(
  *          context={"manager"},
