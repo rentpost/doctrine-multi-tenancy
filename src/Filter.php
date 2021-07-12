@@ -188,12 +188,6 @@ class Filter extends SQLFilter
      */
     public function addFilterConstraint(ClassMetadata $targetEntity, $targetTableAlias)
     {
-        // It seems Doctrine doesn't perform a filter check on relational hydration.  Therefore,
-        // we're going to perform a check on this filter ourselves
-        if ($this->getEntityManager()->getFilters()->isEnabled('multi-tenancy')) {
-            return '';
-        }
-
         // Get our multi-tenancy annotation from the class
         $multiTenancy = $this->getAnnotationReader()->getClassAnnotation(
             $targetEntity->reflClass,
