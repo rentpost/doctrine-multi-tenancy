@@ -81,6 +81,8 @@ class Filter extends SQLFilter
      * are syntax constrcuts.  Merge in our defaultMapping last, making sure this isn't cached
      * since we don't want the $targetTableAlias to be cached as the first value.
      *
+     * @param string $targetTableAlias
+     *
      * @return string[][]
      */
     protected function getDefaultMap(string $targetTableAlias): array
@@ -158,6 +160,7 @@ class Filter extends SQLFilter
     /**
      * Parses the annotation where clause, replacing identifiers with values
      *
+     * @param string $filter
      * @param string[] $identifiers
      * @param string[] $values
      */
@@ -171,6 +174,8 @@ class Filter extends SQLFilter
      * Sets the annotation reader to be used.  This is beneficial for setting a cached annotation
      * reader.  Unfortunately Doctrine doesn't allow access to the constructor for SQLFilters and
      * also does not provide many good ways of managing dependencies within filters.
+     *
+     * @param Reader $annotationReader
      */
     public function setAnnotationReader(Reader $annotationReader): void
     {
@@ -184,16 +189,11 @@ class Filter extends SQLFilter
      *
      * These ValueHolders expose a string value that can be used within the annotation syntax.
      *
+     * @param ClassMetadata $targetEntity
      * @param string $targetTableAlias
      */
     public function addFilterConstraint(ClassMetadata $targetEntity, $targetTableAlias)
     {
-        // It seems Doctrine doesn't perform a filter check on relational hydration.  Therefore,
-        // we're going to perform a check on this filter ourselves
-        if ($this->getEntityManager()->getFilters()->isEnabled('multi-tenancy')) {
-            return '';
-        }
-
         // Get our multi-tenancy annotation from the class
         $multiTenancy = $this->getAnnotationReader()->getClassAnnotation(
             $targetEntity->reflClass,
