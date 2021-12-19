@@ -17,7 +17,8 @@ Use the following instructions to get started with this Doctrine extension.
 ### Prerequisites
 
 This extension is compatible with [Doctrine 2](https://github.com/doctrine/orm) and PHP >= 8.1.
-*If you're looking for PHP 7.4 support, please use `1.0.3`, the last version to support it*
+
+*If you're looking for PHP >= 7.4 support, please use `1.0.3`, the last version to support it*
 
 ### Installation
 
