@@ -5,7 +5,7 @@ Doctrine 2 extension providing advanced multi-tenancy support. The purpose of th
 ## Why?
 Often times multi-tenancy is handled differently depending on a number of different business concerns. Maybe each user has different roles, or is part of multiple organizations, etc.
 
-Now, generally speaking, you could handle much of these concerns within repositories, and if your business logic allows for such organization, you should consider this approach instead. However, this is not always possible or ideal in many scenarios, especially when accessing relational entities and even more-so when exposing your entities and relationships over something like a GraphQL API where relationships can be traversed in a user-defined manner.
+Now, generally speaking, you could handle much of these concerns within repositories, and if your business logic allows for such organization, you should consider this approach instead. However, this is not always possible or ideal in many scenarios, especially when accessing relational entities and even more-so when exposing your entities and relationships over something like a GraphQL API where relationships can be traversed in an end-user defined manner.
 
 This advanced approach to multi-tenancy aims to address these concerns, providing
 flexibility to define how multi-tenancy is handled across *contexts* on a per-entity basis.
@@ -16,18 +16,18 @@ Use the following instructions to get started with this Doctrine extension.
 
 ### Prerequisites
 
-This extension is compatible with [Doctrine 2](https://github.com/doctrine/orm) and PHP >= 7.4.
+This extension is compatible with [Doctrine 2](https://github.com/doctrine/orm) and PHP >= 8.1.
+*If you're looking for PHP 7.4 support, please use `1.0.3`, the last version to support it*
 
 ### Installation
 
-```
+```bash
 composer install rentpost/doctrine-multi-tenancy
 ```
 
 ### Setup
 
 In order for this extension to work, you will need to register it with Doctrine's `EntityManager` and `EventManager`. To do so, you'll want to add the following to your configuration and setup for Doctrine. How this is done will depend on your implementation. See [Doctrine's installation and configuration documentation](https://www.doctrine-project.org/projects/doctrine-orm/en/2.7/reference/configuration.html) for further details.
-
 
 ```php
 use Doctrine\ORM\Configuration;
@@ -84,7 +84,7 @@ public function getValue(): ?string;
 
 The example, `User`, above might return `userId` as the "identifier" and the id of that User, represented as a string. It's effectively acting as a key/value store that's lazily loaded, such that, the value can mutate state.
 
-The purpose of this will be more clear when viewing the example annotation below.
+The purpose of this will be more clear when viewing the example attributes below.
 
 #### What is a ContextProvider?
 
@@ -106,18 +106,7 @@ public function isContextual(): bool;
 
 Using the `Admin` example above, we might return `admin` as an "identifier". The `isContextual` method is responsible for determining if this particular `admin` identifier is consider to be within context, or contextual. In this situation, you might construct this class with a `User` object that has a method called `isAdmin`.
 
-As with the `ValueHolder`, this will all be more clear when viewing the example annotation below.
-
-#### Additional Setup *(recommended)*
-
-We also recommend using the cached annotation reader with the MultiTenancy extension. This is important since the annotations are used for every entity SQL query.
-
-```php
-// Doctrine doesn't make accessing the Filter easy
-$entityManager->getFilters()
-    ->getEnabledFilters()['multi-tenancy']
-    ->setAnnotationReader($cachedAnnotationReader);
-```
+As with the `ValueHolder`, this will all be more clear when viewing the example attributes below.
 
 ## Usage
 
@@ -162,23 +151,18 @@ In the second filter, the `product` table doesn't have access to the necessary i
 use Doctrine\ORM\Mapping as ORM;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 
-/**
- * @ORM\Entity
- *
- * @MultiTenancy(filters={
- *      @MultiTenancy\Filter(
- *          where="$this.company_id = {companyId}"
- *      ),
- *      @MultiTenancy\Filter(
- *          context={"manager"},
- *          where="$this.id IN(
- *              SELECT product_id
- *              FROM product_group
- *              WHERE status = 'published'
- *          )"
- *      )
- * })
- */
+#[ORM\Entity]
+#[MultiTenancy(filters: [
+    new MuiltiTenancy\Filter(where: '$this.company_id = {companyId}'),
+    new MultiTenancy\Filter(
+        context: ['manager'],
+        where: '$this.id IN(
+            SELECT product_id
+            FROM product_group
+            WHERE status = 'published'
+        )'
+    ),
+])]
 class Product
 {
   // Whatever

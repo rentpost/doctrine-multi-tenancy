@@ -4,7 +4,6 @@ declare(strict_types = 1);
 
 namespace Rentpost\Doctrine\MultiTenancy;
 
-use Doctrine\Common\Annotations\Reader;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Query\Filter\SQLFilter;
@@ -146,7 +145,7 @@ class Filter extends SQLFilter
 
 
     /**
-     * Parses the annotation where clause, replacing identifiers with values
+     * Parses the attribute where clause, replacing identifiers with values
      *
      * @param string[] $identifiers
      * @param string[] $values
@@ -158,21 +157,10 @@ class Filter extends SQLFilter
 
 
     /**
-     * Sets the annotation reader to be used.  This is beneficial for setting a cached annotation
-     * reader.  Unfortunately Doctrine doesn't allow access to the constructor for SQLFilters and
-     * also does not provide many good ways of managing dependencies within filters.
-     */
-    public function setAnnotationReader(Reader $annotationReader): void
-    {
-        $this->annotationReader = $annotationReader;
-    }
-
-
-    /**
-     * Adds a SQL query filter based on the annotation syntax and the ValueHolders values
+     * Adds a SQL query filter based on the attribute syntax and the ValueHolders values
      * supplied to the MultiTenancy\Listener and identifier by their "identifier".
      *
-     * These ValueHolders expose a string value that can be used within the annotation syntax.
+     * These ValueHolders expose a string value that can be used within the attribute syntax.
      *
      * @param string $targetTableAlias
      */
