@@ -4,12 +4,11 @@ declare(strict_types = 1);
 
 namespace Rentpost\Doctrine\MultiTenancy;
 
-use Doctrine\Common\Annotations\AnnotationReader;
 use Doctrine\Common\Annotations\Reader;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Query\Filter\SQLFilter;
-use Rentpost\Doctrine\MultiTenancy\Annotation\MultiTenancy;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 
 /**
  * Multi-tenancy filter to handle filtering by the company
@@ -21,16 +20,7 @@ class Filter extends SQLFilter
 
     protected ?Listener $listener = null;
     protected ?EntityManagerInterface $entityManager = null;
-    protected ?Reader $annotationReader = null;
 
-
-    /**
-     * Gets the annotation reader
-     */
-    protected function getAnnotationReader(): Reader
-    {
-        return $this->annotationReader ?: new AnnotationReader();
-    }
 
 
     /**
@@ -188,20 +178,19 @@ class Filter extends SQLFilter
      */
     public function addFilterConstraint(ClassMetadata $targetEntity, $targetTableAlias)
     {
-        // Get our multi-tenancy annotation from the class
-        $multiTenancy = $this->getAnnotationReader()->getClassAnnotation(
-            $targetEntity->reflClass,
-            MultiTenancy::class,
-        );
+        $attributes = $targetEntity->reflClass->getAttributes(MultiTenancy::class);
 
-        // We get null if the annotation hasn't been defined. That's an issue since, for security
-        // reasons, we want to ensure that the entity has explicitly been disabled for multi-tenancy.
-        if (!$multiTenancy instanceof MultiTenancy) {
-            throw new \LogicException(sprintf(
-                '%s must have the MultiTenancy annotation added to the class docblock.',
+        // If no attributes have been defined, this is an issue. For security reasons, we want
+        // to ensure that the entity has explicitly been disabled for multi-tenancy.
+        if (count($attributes) === 0) {
+            throw new AttributeException(sprintf(
+                '%s must have the MultiTenancy attribute added to the class docblock.',
                 $targetEntity->rootEntityName,
             ));
         }
+
+        $multiTenancy = $attributes[0]->newInstance();
+        assert($multiTenancy instanceof MultiTenancy);
 
         if (!$multiTenancy->isEnabled()) {
             return '';
@@ -209,14 +198,17 @@ class Filter extends SQLFilter
 
         $filters = $multiTenancy->getFilters();
         if (!$filters) {
-            throw new \LogicException(sprintf(
+            throw new AttributeException(sprintf(
                 '%s is enabled for MultiTenancy, but there were not any added filters.',
                 $targetEntity->rootEntityName,
             ));
         }
 
         $defaultMap = $this->getDefaultMap($targetTableAlias);
-        [$identifiers, $values] = $this->getMergedMaps($defaultMap, ...$this->getValueHolderIdentifiersAndValues());
+        [$identifiers, $values] = $this->getMergedMaps(
+            $defaultMap,
+            ...$this->getValueHolderIdentifiersAndValues(),
+        );
 
         $whereClauses = [];
         foreach ($filters as $filter) {

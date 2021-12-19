@@ -139,15 +139,13 @@ In this example, it's assumed that the `Product` table has a column called `comp
 
 ```php
 use Doctrine\ORM\Mapping as ORM;
-use Rentpost\Doctrine\MultiTenancy\Annotation\MultiTenancy;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 
-/**
- * @ORM\Entity
- *
- * @MultiTenancy(filters={
- *      @MultiTenancy\Filter(where="$this.company_id = {companyId}")
- * })
- */
+#[ORM\Entity]
+#[MultiTenancy(filters: [
+    new MultiTenancy\Filter(where: '$this.company_id = {companyId}'),
+])]
+
 class Product
 {
   // Whatever
@@ -162,7 +160,7 @@ In the second filter, the `product` table doesn't have access to the necessary i
 
 ```php
 use Doctrine\ORM\Mapping as ORM;
-use Rentpost\Doctrine\MultiTenancy\Annotation\MultiTenancy;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 
 /**
  * @ORM\Entity
