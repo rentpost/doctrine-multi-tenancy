@@ -11,7 +11,7 @@ use Attribute;
  *
  * @author Jacob Thomason <jacob@rentpost.com>
  */
-#[Attribute(Attribute::TARGET_CLASS|Attribute::IS_REPEATABLE)]
+#[Attribute(Attribute::TARGET_CLASS | Attribute::IS_REPEATABLE)]
 final class Filter
 {
 
