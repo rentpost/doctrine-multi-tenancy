@@ -11,7 +11,9 @@ use Attribute;
  *
  * @author Jacob Thomason <jacob@rentpost.com>
  */
+
 #[Attribute(Attribute::TARGET_CLASS)]
+
 final class MultiTenancy
 {
 

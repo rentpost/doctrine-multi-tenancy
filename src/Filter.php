@@ -21,7 +21,6 @@ class Filter extends SQLFilter
     protected ?EntityManagerInterface $entityManager = null;
 
 
-
     /**
      * Gets the EntityManager.
      *
