@@ -8,6 +8,8 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Query\Filter\SQLFilter;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
+use Rentpost\Exception\NotSupportedException;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\Filter as FilterAttribute;
 
 /**
  * Multi-tenancy filter to handle filtering by the company
@@ -85,17 +87,21 @@ class Filter extends SQLFilter
      *
      * @return string[][]
      */
-    protected function getValueHolderIdentifiersAndValues(): array
+    protected function getValueHolderIdentifiersAndValues(FilterAttribute $filter): array
     {
-        $identifiers = array_keys($this->getListener()->getValueHolders());
-        foreach ($identifiers as &$identifier) {
-            // Add braces to prevent replacing unwanted syntax
-            $identifier = '/\{' . $identifier . '\}/';
-        }
+        $identifiers = [];
+        $values = [];
+        foreach ($this->getListener()->getValueHolders() as $valueHolder) {
+            assert($valueHolder instanceof ValueHolderInterface);
 
-        $values = array_values($this->getListener()->getValueHolders());
-        foreach ($values as &$value) {
-            $value = $value->getValue();
+            // Only build values for the identifiers in the filter where clause if it contains the
+            // identifier.  Otherwise it's not needed and in some scopes may not be available at all.
+            if (!\str_contains($filter->getWhereClause(), $valueHolder->getIdentifier())) {
+                continue;
+            }
+
+            $identifiers[] = '/\{' . $valueHolder->getIdentifier() . '\}/';
+            $values[] = $valueHolder->getValue();
         }
 
         return [$identifiers, $values];
@@ -191,17 +197,19 @@ class Filter extends SQLFilter
             ));
         }
 
-        $defaultMap = $this->getDefaultMap($targetTableAlias);
-        [$identifiers, $values] = $this->getMergedMaps(
-            $defaultMap,
-            ...$this->getValueHolderIdentifiersAndValues(),
-        );
-
         $whereClauses = [];
+        $defaultMap = $this->getDefaultMap($targetTableAlias);
         foreach ($filters as $filter) {
+            assert($filter instanceof FilterAttribute);
+
             if (!$this->isContextual($filter->getContext())) {
                 continue;
             }
+
+            [$identifiers, $values] = $this->getMergedMaps(
+                $defaultMap,
+                ...$this->getValueHolderIdentifiersAndValues($filter),
+            );
 
             $whereClauses[] = $this->parseWhereClause($filter->getWhereClause(), $identifiers, $values);
         }
