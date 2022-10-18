@@ -8,7 +8,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Query\Filter\SQLFilter;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
-use Rentpost\Exception\NotSupportedException;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\Filter as FilterAttribute;
 
 /**
@@ -171,6 +170,11 @@ class Filter extends SQLFilter
      */
     public function addFilterConstraint(ClassMetadata $targetEntity, $targetTableAlias)
     {
+        // If we're explicitly disabling multi-tenancy, there is nothing to do here
+        if (!$this->getEntityManager()->getFilters()->isEnabled('multi_tenancy')) {
+            return '';
+        }
+
         $attributes = $targetEntity->reflClass->getAttributes(MultiTenancy::class);
 
         // If no attributes have been defined, this is an issue. For security reasons, we want
@@ -185,6 +189,7 @@ class Filter extends SQLFilter
         $multiTenancy = $attributes[0]->newInstance();
         assert($multiTenancy instanceof MultiTenancy);
 
+        // Check to see if multi-tenancy is enabled on the entity
         if (!$multiTenancy->isEnabled()) {
             return '';
         }
