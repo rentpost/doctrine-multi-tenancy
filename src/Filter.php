@@ -171,7 +171,7 @@ class Filter extends SQLFilter
     public function addFilterConstraint(ClassMetadata $targetEntity, $targetTableAlias)
     {
         // If we're explicitly disabling multi-tenancy, there is nothing to do here
-        if (!$this->getEntityManager()->getFilters()->isEnabled('multi_tenancy')) {
+        if (!$this->getEntityManager()->getFilters()->isEnabled('multi-tenancy')) {
             return '';
         }
 
