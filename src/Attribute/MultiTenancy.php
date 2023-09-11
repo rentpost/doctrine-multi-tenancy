@@ -55,6 +55,6 @@ final class MultiTenancy
      */
     public function getFilterStrategy(): FilterStrategy
     {
-        return $this->filterStrategy;
+        return $this->strategy;
     }
 }
