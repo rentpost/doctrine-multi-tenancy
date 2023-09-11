@@ -5,7 +5,7 @@ declare(strict_types = 1);
 namespace Rentpost\Doctrine\MultiTenancy\Attribute;
 
 use Attribute;
-use Rentpost\Doctrine\MultiTenancy\FilterStrategy;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\FilterStrategy;
 
 /**
  * Attribute service for Multi-tenancy
