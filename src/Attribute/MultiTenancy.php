@@ -5,6 +5,7 @@ declare(strict_types = 1);
 namespace Rentpost\Doctrine\MultiTenancy\Attribute;
 
 use Attribute;
+use Rentpost\Doctrine\MultiTenancy\FilterStrategy;
 
 /**
  * Attribute service for Multi-tenancy
@@ -22,7 +23,11 @@ final class MultiTenancy
      *
      * @param MultiTenancy\Filter[] $filters
      */
-    public function __construct(protected array $filters = [], protected bool $enable = true) {}
+    public function __construct(
+        private bool $enable = true,
+        private array $filters = [],
+        private FilterStrategy $filterStrategy = FilterStrategy::AnyMatch,
+    ) {}
 
 
     /**
@@ -42,5 +47,14 @@ final class MultiTenancy
     public function getFilters(): array
     {
         return $this->filters;
+    }
+
+
+    /**
+     * Gets the filter strategy
+     */
+    public function getFilterStrategy(): FilterStrategy
+    {
+        return $this->filterStrategy;
     }
 }

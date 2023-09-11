@@ -128,27 +128,23 @@ class Filter extends SQLFilter
     /**
      * Checks to see if the given context is considered to be in context, or contexual
      *
-     * @param string[] $context     An array of all the contexts that apply
-     * @param bool $requireAll      If all contexts must evalidate as true to be considered in context
+     * @param string[] $context   An array of all the contexts that apply
      */
-    protected function isContextual(array $context, bool $requireAll): bool
+    protected function isContextual(array $context): bool
     {
         // If we don't have any contexts, it applies to all by default
         if (!count($context)) {
             return true;
         }
 
-        // If we require all contexts to be true, then we can just check if the count of the
-        // contexts is the same as the count of the contexts that are in context.  Otherwise,
-        // if any is within context it's considered contextual.
-        $inContextCount = count(array_filter($context, function ($context) {
-            $contextProvider = $this->getListener()->getContextProvider($context);
+        foreach ($context as $c) {
+            $contextProvider = $this->getListener()->getContextProvider($c);
             if ($contextProvider->isContextual()) {
                 return true;
             }
-        }));
+        }
 
-        return $requireAll ? $inContextCount === count($context) : $inContextCount > 0;
+        return false;
     }
 
 
@@ -211,7 +207,7 @@ class Filter extends SQLFilter
         foreach ($filters as $filter) {
             assert($filter instanceof FilterAttribute);
 
-            if (!$this->isContextual($filter->getContext(), $filter->areAllContextsRequired())) {
+            if (!$this->isContextual($filter->getContext())) {
                 continue;
             }
 
@@ -221,6 +217,12 @@ class Filter extends SQLFilter
             );
 
             $whereClauses[] = $this->parseWhereClause($filter->getWhereClause(), $identifiers, $values);
+
+            // At this point we've processed at least one contextual filter.  For a FirstMatch filter
+            // strategy, this is where we break
+            if ($multiTenancy->getFilterStrategy() === FilterStrategy::FirstMatch) {
+                break;
+            }
         }
 
         return implode(' AND ', $whereClauses);
