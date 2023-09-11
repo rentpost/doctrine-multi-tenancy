@@ -156,7 +156,7 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 #[MultiTenancy(filters: [
     new MuiltiTenancy\Filter(where: '$this.company_id = {companyId}'),
     new MultiTenancy\Filter(
-        context: ['manager'],
+        context: ['visitor'],
         where: '$this.id IN(
             SELECT product_id
             FROM product_group
@@ -164,6 +164,43 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
         )'
     ),
 ])]
+class Product
+{
+  // Whatever
+}
+```
+
+#### Example with multiple context filters and a strategy
+
+In the previous examples, we've been using the default `FilterStrategy::AnyMatch`, which means that
+any of the contexts that evaluate as true have had their where clause applied.  In this example, you
+can see that we've applied a `FilterStrategy::FirstMatch`, which means the filter contextual filter
+will be applied - only.
+
+**Keep in mind, if you do not provide a context, it's assumed to be in context, and that filter will
+be applied, meaning any subsequent filters will never be evaluated.**
+
+```php
+use Doctrine\ORM\Mapping as ORM;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
+
+#[ORM\Entity]
+#[MultiTenancy(
+    strategy: MultiTenancy\FilterStrategy::FirstMatch,
+    filters: [
+        new MuiltiTenancy\Filter(
+            context: ['admin']
+            where: '$this.company_id = {companyId}'),
+        new MultiTenancy\Filter(
+            context: ['visitor'],
+            where: '$this.id IN(
+                SELECT product_id
+                FROM product_group
+                WHERE status = 'published'
+            )'
+        ),
+    ],
+)]
 class Product
 {
   // Whatever
