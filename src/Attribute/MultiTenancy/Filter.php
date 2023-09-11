@@ -24,7 +24,6 @@ final class Filter
      */
     public function __construct(
         private array $context = [],
-        private bool $requireAllContexts = false,
         private string $where = '',
     ) {}
 
@@ -37,15 +36,6 @@ final class Filter
     public function getContext(): array
     {
         return $this->context;
-    }
-
-
-    /**
-     * Gets whether all contexts are required
-     */
-    public function areAllContextsRequired(): bool
-    {
-        return $this->requireAllContexts;
     }
 
 
