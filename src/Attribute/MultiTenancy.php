@@ -26,7 +26,7 @@ final class MultiTenancy
     public function __construct(
         private bool $enable = true,
         private array $filters = [],
-        private FilterStrategy $filterStrategy = FilterStrategy::AnyMatch,
+        private FilterStrategy $strategy = FilterStrategy::AnyMatch,
     ) {}
 
 
