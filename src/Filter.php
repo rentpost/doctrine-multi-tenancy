@@ -128,23 +128,27 @@ class Filter extends SQLFilter
     /**
      * Checks to see if the given context is considered to be in context, or contexual
      *
-     * @param string[] $context   An array of all the contexts that apply
+     * @param string[] $context     An array of all the contexts that apply
+     * @param bool $requireAll      If all contexts must evalidate as true to be considered in context
      */
-    protected function isContextual(array $context): bool
+    protected function isContextual(array $context, bool $requireAll): bool
     {
         // If we don't have any contexts, it applies to all by default
         if (!count($context)) {
             return true;
         }
 
-        foreach ($context as $c) {
-            $contextProvider = $this->getListener()->getContextProvider($c);
+        // If we require all contexts to be true, then we can just check if the count of the
+        // contexts is the same as the count of the contexts that are in context.  Otherwise,
+        // if any is within context it's considered contextual.
+        $inContextCount = count(array_filter($context, function ($context) {
+            $contextProvider = $this->getListener()->getContextProvider($context);
             if ($contextProvider->isContextual()) {
                 return true;
             }
-        }
+        }));
 
-        return false;
+        return $requireAll ? $inContextCount === count($context) : $inContextCount > 0;
     }
 
 
@@ -207,7 +211,7 @@ class Filter extends SQLFilter
         foreach ($filters as $filter) {
             assert($filter instanceof FilterAttribute);
 
-            if (!$this->isContextual($filter->getContext())) {
+            if (!$this->isContextual($filter->getContext(), $filter->areAllContextsRequired())) {
                 continue;
             }
 
