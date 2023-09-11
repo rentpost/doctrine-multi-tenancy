@@ -7,9 +7,9 @@ namespace Rentpost\Doctrine\MultiTenancy;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Query\Filter\SQLFilter;
-use Rentpost\Doctrine\MultiTenancy\Attribute\FilterStrategy;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\Filter as FilterAttribute;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\FilterStrategy;
 
 /**
  * Multi-tenancy filter to handle filtering by the company
