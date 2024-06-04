@@ -24,9 +24,9 @@ final class MultiTenancy
      * @param MultiTenancy\Filter[] $filters
      */
     public function __construct(
-        private bool $enable = true,
-        private array $filters = [],
-        private FilterStrategy $strategy = FilterStrategy::AnyMatch,
+        private readonly bool $enable = true,
+        private readonly array $filters = [],
+        private readonly FilterStrategy $strategy = FilterStrategy::AnyMatch,
     ) {}
 
 

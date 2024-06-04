@@ -19,8 +19,8 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\FilterStrategy;
 class Filter extends SQLFilter
 {
 
-    protected ?Listener $listener = null;
-    protected ?EntityManagerInterface $entityManager = null;
+    private ?Listener $listener = null;
+    private ?EntityManagerInterface $entityManager = null;
 
 
     /**
@@ -209,6 +209,10 @@ class Filter extends SQLFilter
             assert($filter instanceof FilterAttribute);
 
             if (!$this->isContextual($filter->getContext())) {
+                continue;
+            }
+
+            if ($filter->isIgnored()) {
                 continue;
             }
 

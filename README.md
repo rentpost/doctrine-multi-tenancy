@@ -192,6 +192,10 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
             context: ['admin']
             where: '$this.company_id = {companyId}'),
         new MultiTenancy\Filter(
+            context: ['other'],
+            ignore: true,
+        ),
+        new MultiTenancy\Filter(
             context: ['visitor'],
             where: '$this.id IN(
                 SELECT product_id
@@ -206,6 +210,11 @@ class Product
   // Whatever
 }
 ```
+
+One other thing to note about the above example is the `ignore` parameter.  This allows for you to
+specify a contact where no filters will be applied.  This can be expecially useful in combination
+with the `FilterStrategy::FirstMatch` strategy.  The combination of these two allows you to entirely,
+or selectively, ignore all multi-tenancy for an entity - for a given context, that is.
 
 ## Issues / Bugs / Questions
 

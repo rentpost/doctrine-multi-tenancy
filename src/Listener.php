@@ -19,7 +19,10 @@ use Rentpost\Doctrine\MultiTenancy\ContextProviderInterface;
 class Listener implements EventSubscriber
 {
 
+    /** @var ValueHolderInterface */
     protected array $valueHolders = [];
+
+    /** @var ContextProviderInterface */
     protected array $contextProviders = [];
 
 
@@ -59,7 +62,7 @@ class Listener implements EventSubscriber
     /**
      * Gets all of the ValueHolders
      *
-     * @return string[]
+     * @return array<ValueHolderInterface>
      */
     public function getValueHolders(): array
     {
@@ -92,7 +95,7 @@ class Listener implements EventSubscriber
     /**
      * Gets all of the ContextProviders
      *
-     * @return string[]
+     * @return array<ContextProviderInterface>
      */
     public function getContextProviders(): array
     {

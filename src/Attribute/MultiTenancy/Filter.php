@@ -20,11 +20,14 @@ final class Filter
     /**
      * Constructor
      *
-     * @param string[] $context
+     * @param string[] $context     The contexts for which to apply the filter
+     * @param string $where         The SQL where clause (use $this, for the current Entity's table)
+     * @param bool $ignore          Whether to ignore this filter and not apply any conditions
      */
     public function __construct(
-        private array $context = [],
-        private string $where = '',
+        private readonly array $context = [],
+        private readonly string $where = '',
+        private bool $ignore = false,
     ) {}
 
 
@@ -45,5 +48,14 @@ final class Filter
     public function getWhereClause(): string
     {
         return $this->where;
+    }
+
+
+    /**
+     * Whether this filter is ignored and won't apply any conditions
+     */
+    public function isIgnored(): bool
+    {
+        return $this->ignore;
     }
 }
