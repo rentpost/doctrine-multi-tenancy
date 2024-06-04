@@ -212,7 +212,7 @@ class Product
 ```
 
 One other thing to note about the above example is the `ignore` parameter.  This allows for you to
-specify a contact where no filters will be applied.  This can be expecially useful in combination
+specify a context where no filters will be applied.  This can be especially useful in combination
 with the `FilterStrategy::FirstMatch` strategy.  The combination of these two allows you to entirely,
 or selectively, ignore all multi-tenancy for an entity - for a given context, that is.
 
