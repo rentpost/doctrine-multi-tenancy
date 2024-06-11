@@ -213,7 +213,12 @@ class Filter extends SQLFilter
             }
 
             if ($filter->isIgnored()) {
-                continue;
+                // If we're using a FirstMatch strategy, we need to break, that's it.
+                if ($multiTenancy->getFilterStrategy() === FilterStrategy::FirstMatch) {
+                    break;
+                } else {
+                    continue;
+                }
             }
 
             [$identifiers, $values] = $this->getMergedMaps(
