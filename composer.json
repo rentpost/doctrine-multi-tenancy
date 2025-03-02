@@ -12,7 +12,8 @@
     ],
     "require": {
         "php": ">=8.2",
-        "doctrine/orm": "^2.10"
+        "doctrine/orm": "^2.10",
+        "doctrine/event-manager": "^2.0"
     },
     "autoload": {
         "psr-4": {

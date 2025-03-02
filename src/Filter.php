@@ -50,7 +50,7 @@ class Filter extends SQLFilter
         }
 
         $evm = $this->getEntityManager()->getEventManager();
-        foreach ($evm->getListeners() as $listeners) {
+        foreach ($evm->getAllListeners() as $listeners) {
             foreach ($listeners as $listener) {
                 if ($listener instanceof Listener) {
                     $this->listener = $listener;
