@@ -86,6 +86,8 @@ class Filter extends SQLFilter
      * Gets the identifiers and values array maps from the ValueHolders
      *
      * @return string[][]
+     *
+     * @throws KeyValueException When a filter contains an identifier but the ValueHolder has no value
      */
     protected function getValueHolderIdentifiersAndValues(FilterAttribute $filter): array
     {
@@ -95,13 +97,25 @@ class Filter extends SQLFilter
             assert($valueHolder instanceof ValueHolderInterface);
 
             // Only build values for the identifiers in the filter where clause if it contains the
-            // identifier.  Otherwise it's not needed and in some scopes may not be available at all.
-            if (!\str_contains($filter->getWhereClause(), $valueHolder->getIdentifier())) {
+            // identifier wrapped in braces.  Otherwise it's not needed and in some scopes may not
+            // be available at all.
+            $placeholder = '{' . $valueHolder->getIdentifier() . '}';
+            if (!\str_contains($filter->getWhereClause(), $placeholder)) {
                 continue;
             }
 
+            $value = $valueHolder->getValue();
+
+            if ($value === null) {
+                throw new KeyValueException(\sprintf(
+                    'Filter contains identifier "{%s}" but ValueHolder returned null. ' .
+                    'Ensure the ValueHolder has a value set before the filter is applied.',
+                    $valueHolder->getIdentifier(),
+                ));
+            }
+
             $identifiers[] = '/\{' . $valueHolder->getIdentifier() . '\}/';
-            $values[] = $valueHolder->getValue();
+            $values[] = $value;
         }
 
         return [$identifiers, $values];
