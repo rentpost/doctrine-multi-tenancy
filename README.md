@@ -1,6 +1,6 @@
 # Doctrine MultiTenancy
 
-Doctrine 2 extension providing advanced multi-tenancy support. The purpose of this extension is to allow flexibility in how multi-tenancy is defined on a per entity basis, as well as within contexts.
+Doctrine 3 extension providing advanced multi-tenancy support. The purpose of this extension is to allow flexibility in how multi-tenancy is defined on a per entity basis, as well as within contexts.
 
 ## Why?
 Often times multi-tenancy is handled differently depending on a number of different business concerns. Maybe each user has different roles, or is part of multiple organizations, etc.
@@ -16,7 +16,7 @@ Use the following instructions to get started with this Doctrine extension.
 
 ### Prerequisites
 
-This extension is compatible with [Doctrine 2](https://github.com/doctrine/orm) and PHP >= 8.1.
+This extension is compatible with [Doctrine 3](https://github.com/doctrine/orm) and PHP >= 8.1.
 
 *If you're looking for PHP >= 7.4 support, please use `1.0.3`, the last version to support it*
 
