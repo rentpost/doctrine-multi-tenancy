@@ -89,7 +89,7 @@ class Filter extends SQLFilter
      *
      * @throws KeyValueException When a filter contains an identifier but the ValueHolder has no value
      */
-    protected function getValueHolderIdentifiersAndValues(FilterAttribute $filter): array
+    protected function getValueHolderIdentifiersAndValues(FilterAttribute $filter, ClassMetadata $targetEntity): array
     {
         $identifiers = [];
         $values = [];
@@ -108,9 +108,11 @@ class Filter extends SQLFilter
 
             if ($value === null) {
                 throw new KeyValueException(\sprintf(
-                    'Filter contains identifier "{%s}" but ValueHolder returned null. ' .
+                    'Filter identifier, {%s}, in "%s" where clause, for %s, evaluates to null. ' .
                     'Ensure the ValueHolder has a value set before the filter is applied.',
                     $valueHolder->getIdentifier(),
+                    $filter->getWhereClause(),
+                    $targetEntity->rootEntityName,
                 ));
             }
 
@@ -237,7 +239,7 @@ class Filter extends SQLFilter
 
             [$identifiers, $values] = $this->getMergedMaps(
                 $defaultMap,
-                ...$this->getValueHolderIdentifiersAndValues($filter),
+                ...$this->getValueHolderIdentifiersAndValues($filter, $targetEntity),
             );
 
             $whereClauses[] = $this->parseWhereClause($filter->getWhereClause(), $identifiers, $values);
