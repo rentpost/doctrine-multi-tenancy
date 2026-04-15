@@ -216,6 +216,47 @@ specify a context where no filters will be applied.  This can be especially usef
 with the `FilterStrategy::FirstMatch` strategy.  The combination of these two allows you to entirely,
 or selectively, ignore all multi-tenancy for an entity - for a given context, that is.
 
+#### Example with Strict strategy (deny by default)
+
+`FilterStrategy::Strict` flips to a "deny by default" model. It processes filters like `AnyMatch` (all matching filters AND'd together), but after processing, if any active `ContextProvider` is not covered by any filter's `context:` array, `1 = 0` is appended — denying all results.
+
+This eliminates the need to explicitly deny every uncovered context. Only contexts that are declared in a filter (even with `ignore: true`) are permitted.
+
+```php
+use Doctrine\ORM\Mapping as ORM;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
+
+#[ORM\Entity]
+#[MultiTenancy(
+    strategy: MultiTenancy\FilterStrategy::Strict,
+    filters: [
+        new MultiTenancy\Filter(where: '$this.company_id = {companyId}'),
+        new MultiTenancy\Filter(
+            context: ['admin'],
+            ignore: true,
+        ),
+        new MultiTenancy\Filter(
+            context: ['manager'],
+            where: '$this.id IN(
+                SELECT product_id
+                FROM manager_product
+                WHERE manager_id = {managerId}
+            )',
+        ),
+    ],
+)]
+class Product
+{
+  // Whatever
+}
+```
+
+In this example:
+- The `company_id` filter (no context) always applies
+- An `admin` sees company-wide data (ignored filter, but the context is acknowledged as covered)
+- A `manager` gets the additional scoping filter
+- Any other active context (e.g. `guest`) is automatically denied — no need to add explicit deny filters
+
 ## Using ConditionResolver for Raw SQL Queries
 
 The `Filter` class (Doctrine's `SQLFilter`) only applies to DQL queries. For raw SQL queries in repositories, use `ConditionResolver` directly to get the same multi-tenancy conditions:
