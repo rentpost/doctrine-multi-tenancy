@@ -17,6 +17,8 @@ use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Order;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Product;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Review;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\UnmappedEntity;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\StrictEntity;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\StrictNoContextFreeEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Wishlist;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubContextProvider;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubValueHolder;
@@ -322,5 +324,113 @@ class ConditionResolverTest extends TestCase
         $result = $resolver->resolve(Review::class, 't0');
 
         $this->assertSame('', $result);
+    }
+
+
+    public function testStrictCoveredContextAppliesNormally(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictEntity: customer is covered and active → normal filters, no denial
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame(
+            't0.store_id = 42 AND t0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
+    }
+
+
+    public function testStrictIgnoredContextIsCovered(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [
+                new StubContextProvider('staff', true),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictEntity: staff is covered (ignore: true) → only context-free filter, no denial
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame('t0.store_id = 42', $result);
+    }
+
+
+    public function testStrictUncoveredContextDenied(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictEntity: vendor is active but not in any filter's context → denied
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame('t0.store_id = 42 AND 1 = 0', $result);
+    }
+
+
+    public function testStrictNoActiveContextUsesContextFreeFilters(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictEntity: no context active → only context-free filters, no denial
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame('t0.store_id = 42', $result);
+    }
+
+
+    public function testStrictMultipleActiveContextsOneCovered(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictNoContextFreeEntity: customer covered, vendor NOT → denied
+        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+
+        $this->assertSame(
+            't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7) AND 1 = 0',
+            $result,
+        );
     }
 }

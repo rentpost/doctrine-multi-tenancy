@@ -196,6 +196,36 @@ class ConditionResolver
             }
         }
 
+        if ($multiTenancy->getFilterStrategy() === FilterStrategy::Strict
+            && $this->hasUncoveredContexts($filters)
+        ) {
+            $whereClauses[] = '1 = 0';
+        }
+
         return implode(' AND ', $whereClauses);
+    }
+
+
+    /**
+     * Checks whether any active context is not covered by a filter's context array
+     *
+     * @param FilterAttribute[] $filters
+     */
+    private function hasUncoveredContexts(array $filters): bool
+    {
+        $coveredContexts = [];
+        foreach ($filters as $filter) {
+            foreach ($filter->getContext() as $context) {
+                $coveredContexts[$context] = true;
+            }
+        }
+
+        foreach ($this->listener->getContextProviders() as $contextProvider) {
+            if ($contextProvider->isContextual() && !isset($coveredContexts[$contextProvider->getIdentifier()])) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
