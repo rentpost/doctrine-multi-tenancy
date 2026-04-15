@@ -7,12 +7,12 @@ namespace Rentpost\Doctrine\MultiTenancy;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Mapping\ClassMetadata;
 use Doctrine\ORM\Query\Filter\SQLFilter;
-use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
-use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\Filter as FilterAttribute;
-use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\FilterStrategy;
 
 /**
- * Multi-tenancy filter to handle filtering by the company
+ * Doctrine SQLFilter adapter for multi-tenancy.
+ *
+ * Delegates condition resolution to ConditionResolver, which can also be used
+ * independently for raw SQL queries outside of Doctrine's DQL layer.
  *
  * @author Jacob Thomason <jacob@rentpost.com>
  */
@@ -32,7 +32,6 @@ class Filter extends SQLFilter
     {
         if ($this->entityManager === null) {
             $refl = new \ReflectionProperty('Doctrine\ORM\Query\Filter\SQLFilter', 'em');
-            $refl->setAccessible(true);
             $this->entityManager = $refl->getValue($this);
         }
 
@@ -67,190 +66,19 @@ class Filter extends SQLFilter
 
 
     /**
-     * The default map are things we want to replace in the filter string by default.  These
-     * are syntax constrcuts.  Merge in our defaultMapping last, making sure this isn't cached
-     * since we don't want the $targetTableAlias to be cached as the first value.
-     *
-     * @return string[][]
-     */
-    protected function getDefaultMap(string $targetTableAlias): array
-    {
-        return [
-            '/\$this/' => $targetTableAlias,
-            '/\\n\s+\*/' => '', // Regex pattern to replace: \n *
-        ];
-    }
-
-
-    /**
-     * Gets the identifiers and values array maps from the ValueHolders
-     *
-     * @return string[][]
-     *
-     * @throws KeyValueException When a filter contains an identifier but the ValueHolder has no value
-     */
-    protected function getValueHolderIdentifiersAndValues(FilterAttribute $filter, ClassMetadata $targetEntity): array
-    {
-        $identifiers = [];
-        $values = [];
-        foreach ($this->getListener()->getValueHolders() as $valueHolder) {
-            assert($valueHolder instanceof ValueHolderInterface);
-
-            // Only build values for the identifiers in the filter where clause if it contains the
-            // identifier wrapped in braces.  Otherwise it's not needed and in some scopes may not
-            // be available at all.
-            $placeholder = '{' . $valueHolder->getIdentifier() . '}';
-            if (!\str_contains($filter->getWhereClause(), $placeholder)) {
-                continue;
-            }
-
-            $value = $valueHolder->getValue();
-
-            if ($value === null) {
-                throw new KeyValueException(\sprintf(
-                    'Filter identifier, {%s}, in "%s" where clause, for %s, evaluates to null. ' .
-                    'Ensure the ValueHolder has a value set before the filter is applied.',
-                    $valueHolder->getIdentifier(),
-                    $filter->getWhereClause(),
-                    $targetEntity->rootEntityName,
-                ));
-            }
-
-            $identifiers[] = '/\{' . $valueHolder->getIdentifier() . '\}/';
-            $values[] = $value;
-        }
-
-        return [$identifiers, $values];
-    }
-
-
-    /**
-     * Gets the merged maps
-     *
-     * @param string[] $defaultMap
-     * @param string[][] $identifiers
-     * @param string[][] $values
-     *
-     * @return string[][]
-     */
-    protected function getMergedMaps(array $defaultMap, array $identifiers, array $values): array
-    {
-        return [
-            array_merge(array_keys($defaultMap), $identifiers),
-            array_merge(array_values($defaultMap), $values),
-        ];
-    }
-
-
-    /**
-     * Checks to see if the given context is considered to be in context, or contexual
-     *
-     * @param string[] $context   An array of all the contexts that apply
-     */
-    protected function isContextual(array $context): bool
-    {
-        // If we don't have any contexts, it applies to all by default
-        if (!count($context)) {
-            return true;
-        }
-
-        foreach ($context as $c) {
-            $contextProvider = $this->getListener()->getContextProvider($c);
-            if ($contextProvider->isContextual()) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-
-    /**
-     * Parses the attribute where clause, replacing identifiers with values
-     *
-     * @param string[] $identifiers
-     * @param string[] $values
-     */
-    protected function parseWhereClause(string $filter, array $identifiers, array $values): string
-    {
-        return \preg_replace($identifiers, $values, $filter);
-    }
-
-
-    /**
      * Adds a SQL query filter based on the attribute syntax and the ValueHolders values
-     * supplied to the MultiTenancy\Listener and identifier by their "identifier".
-     *
-     * These ValueHolders expose a string value that can be used within the attribute syntax.
+     * supplied to the MultiTenancy\Listener and identified by their "identifier".
      *
      * @param string $targetTableAlias
      */
     public function addFilterConstraint(ClassMetadata $targetEntity, string $targetTableAlias): string
     {
-        // If we're explicitly disabling multi-tenancy, there is nothing to do here
         if (!$this->getEntityManager()->getFilters()->isEnabled('multi-tenancy')) {
             return '';
         }
 
-        $attributes = $targetEntity->reflClass->getAttributes(MultiTenancy::class);
+        $resolver = new ConditionResolver($this->getListener());
 
-        // If no attributes have been defined, this is an issue. For security reasons, we want
-        // to ensure that the entity has explicitly been disabled for multi-tenancy.
-        if (count($attributes) === 0) {
-            throw new AttributeException(sprintf(
-                '%s must have the MultiTenancy attribute added to the class docblock.',
-                $targetEntity->rootEntityName,
-            ));
-        }
-
-        $multiTenancy = $attributes[0]->newInstance();
-        assert($multiTenancy instanceof MultiTenancy);
-
-        // Check to see if multi-tenancy is enabled on the entity
-        if (!$multiTenancy->isEnabled()) {
-            return '';
-        }
-
-        $filters = $multiTenancy->getFilters();
-        if (!$filters) {
-            throw new AttributeException(sprintf(
-                '%s is enabled for MultiTenancy, but there were not any added filters.',
-                $targetEntity->rootEntityName,
-            ));
-        }
-
-        $whereClauses = [];
-        $defaultMap = $this->getDefaultMap($targetTableAlias);
-        foreach ($filters as $filter) {
-            assert($filter instanceof FilterAttribute);
-
-            if (!$this->isContextual($filter->getContext())) {
-                continue;
-            }
-
-            if ($filter->isIgnored()) {
-                // If we're using a FirstMatch strategy, we need to break, that's it.
-                if ($multiTenancy->getFilterStrategy() === FilterStrategy::FirstMatch) {
-                    break;
-                } else {
-                    continue;
-                }
-            }
-
-            [$identifiers, $values] = $this->getMergedMaps(
-                $defaultMap,
-                ...$this->getValueHolderIdentifiersAndValues($filter, $targetEntity),
-            );
-
-            $whereClauses[] = $this->parseWhereClause($filter->getWhereClause(), $identifiers, $values);
-
-            // At this point we've processed at least one contextual filter.  For a FirstMatch filter
-            // strategy, this is where we break
-            if ($multiTenancy->getFilterStrategy() === FilterStrategy::FirstMatch) {
-                break;
-            }
-        }
-
-        return implode(' AND ', $whereClauses);
+        return $resolver->resolve($targetEntity->getName(), $targetTableAlias);
     }
 }

@@ -16,14 +16,14 @@ Use the following instructions to get started with this Doctrine extension.
 
 ### Prerequisites
 
-This extension is compatible with [Doctrine 3](https://github.com/doctrine/orm) and PHP >= 8.1.
+This extension is compatible with [Doctrine 3](https://github.com/doctrine/orm) and PHP >= 8.2.
 
 *If you're looking for PHP >= 7.4 support, please use `1.0.3`, the last version to support it*
 
 ### Installation
 
 ```bash
-composer install rentpost/doctrine-multi-tenancy
+composer require rentpost/doctrine-multi-tenancy
 ```
 
 ### Setup
@@ -215,6 +215,48 @@ One other thing to note about the above example is the `ignore` parameter.  This
 specify a context where no filters will be applied.  This can be especially useful in combination
 with the `FilterStrategy::FirstMatch` strategy.  The combination of these two allows you to entirely,
 or selectively, ignore all multi-tenancy for an entity - for a given context, that is.
+
+## Using ConditionResolver for Raw SQL Queries
+
+The `Filter` class (Doctrine's `SQLFilter`) only applies to DQL queries. For raw SQL queries in repositories, use `ConditionResolver` directly to get the same multi-tenancy conditions:
+
+```php
+use Rentpost\Doctrine\MultiTenancy\ConditionResolver;
+
+// The Listener is the same one registered with the EventManager during setup
+$resolver = new ConditionResolver($listener);
+
+// Resolve conditions for a given entity class and table alias
+$condition = $resolver->resolve(Product::class, 'p');
+// Returns e.g.: "p.company_id = 42 AND p.id IN(SELECT product_id FROM ...)"
+
+// Use in a raw SQL query
+$sql = "SELECT p.* FROM product p WHERE {$condition} AND p.status = 'active'";
+```
+
+The `resolve()` method reads the `#[MultiTenancy]` attribute from the entity class, evaluates the current context via `ContextProviders`, substitutes values from `ValueHolders`, and returns the composed WHERE clause fragment. It uses the same logic as the `Filter` — just without requiring Doctrine's DQL layer.
+
+## Development
+
+### Running Tests
+
+```bash
+make test
+```
+
+Or directly via PHPUnit:
+
+```bash
+vendor/bin/phpunit
+```
+
+### Setup
+
+```bash
+make init
+```
+
+This installs all Composer dependencies, including PHPUnit for running the test suite.
 
 ## Issues / Bugs / Questions
 
