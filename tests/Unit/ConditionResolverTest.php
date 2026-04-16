@@ -365,14 +365,14 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity: staff is covered (ignore: true) → only context-free filter, no denial
+        // StrictEntity: staff is active and covered (listed via ignore: true filter, also via context-free) → no denial
         $result = $resolver->resolve(StrictEntity::class, 't0');
 
         $this->assertSame('t0.store_id = 42', $result);
     }
 
 
-    public function testStrictUncoveredContextDenied(): void
+    public function testStrictContextFreeFilterCoversAllContexts(): void
     {
         $listener = $this->createListener(
             [new StubValueHolder('storeId', '42')],
@@ -385,10 +385,32 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity: vendor is active but not in any filter's context → denied
+        // StrictEntity has a context-free filter which, consistent with "applies to all",
+        // also covers all contexts. Vendor is active and not explicitly listed, but the
+        // context-free filter means strict has nothing to enforce.
         $result = $resolver->resolve(StrictEntity::class, 't0');
 
-        $this->assertSame('t0.store_id = 42 AND 1 = 0', $result);
+        $this->assertSame('t0.store_id = 42', $result);
+    }
+
+
+    public function testStrictUncoveredContextDenied(): void
+    {
+        $listener = $this->createListener(
+            [],
+            [
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictNoContextFreeEntity has only contextual filters. Vendor is active but
+        // not in any filter's context → denied.
+        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+
+        $this->assertSame('1 = 0', $result);
     }
 
 
@@ -439,10 +461,9 @@ class ConditionResolverTest extends TestCase
     public function testStrictAmbientContextIsSkipped(): void
     {
         $listener = $this->createListener(
-            [new StubValueHolder('storeId', '42')],
+            [new StubValueHolder('customerId', '7')],
             [
-                new StubContextProvider('staff', false),
-                new StubContextProvider('customer', false),
+                new StubContextProvider('customer', true),
                 new StubContextProvider('publisher', false),
                 new StubAmbientContextProvider('role', true),
                 new StubAmbientContextProvider('user', true),
@@ -450,20 +471,23 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity: role and user are active but ambient → skipped, no denial
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        // StrictNoContextFreeEntity: customer covered and active. Ambients (role, user)
+        // active but skipped during coverage check. No denial.
+        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
 
-        $this->assertSame('t0.store_id = 42', $result);
+        $this->assertSame(
+            't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
     }
 
 
     public function testStrictAmbientContextDoesNotMaskUncovered(): void
     {
         $listener = $this->createListener(
-            [new StubValueHolder('storeId', '42')],
+            [new StubValueHolder('customerId', '7')],
             [
-                new StubContextProvider('staff', false),
-                new StubContextProvider('customer', false),
+                new StubContextProvider('customer', true),
                 new StubContextProvider('publisher', false),
                 new StubContextProvider('vendor', true),
                 new StubAmbientContextProvider('role', true),
@@ -471,9 +495,13 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity: role is ambient (skipped), but vendor is active and uncovered → denied
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        // StrictNoContextFreeEntity: role is ambient (skipped), customer covered,
+        // but vendor is active and uncovered → denied
+        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
 
-        $this->assertSame('t0.store_id = 42 AND 1 = 0', $result);
+        $this->assertSame(
+            't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7) AND 1 = 0',
+            $result,
+        );
     }
 }
