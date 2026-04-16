@@ -196,9 +196,7 @@ class ConditionResolver
             }
         }
 
-        if ($multiTenancy->getFilterStrategy() === FilterStrategy::Strict
-            && $this->hasUncoveredContexts($filters)
-        ) {
+        if ($multiTenancy->isStrict() && $this->hasUncoveredContexts($filters)) {
             $whereClauses[] = '1 = 0';
         }
 

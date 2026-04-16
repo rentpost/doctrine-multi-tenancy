@@ -7,7 +7,7 @@ namespace Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 
 #[MultiTenancy(
-    strategy: MultiTenancy\FilterStrategy::Strict,
+    strict: true,
     filters: [
         new MultiTenancy\Filter(
             context: ['customer'],

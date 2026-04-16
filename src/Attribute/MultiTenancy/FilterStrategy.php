@@ -14,5 +14,4 @@ enum FilterStrategy
 
     case FirstMatch;
     case AnyMatch;
-    case Strict;
 }
