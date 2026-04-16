@@ -113,7 +113,7 @@ As with the `ValueHolder`, this will all be more clear when viewing the example 
 
 Some context providers represent ambient environmental state rather than primary access contexts — for example, "is any role active?" or "is a user logged in?". These are always active and don't represent discrete access levels.
 
-When using `FilterStrategy::Strict`, ambient contexts could cause universal denial, if they're not defined in a filter's `context:` array. To prevent this, implement `AmbientContextProviderInterface` (a marker interface extending `ContextProviderInterface`) on those providers. Strict will skip them during its coverage check.
+When using `strict: true`, ambient contexts could cause universal denial if they're not defined in a filter's `context:` array. To prevent this, implement `AmbientContextProviderInterface` (a marker interface extending `ContextProviderInterface`) on those providers. Strict mode will skip them during its coverage check.
 
 ```php
 use Rentpost\Doctrine\MultiTenancy\AmbientContextProviderInterface;
@@ -231,11 +231,11 @@ specify a context where no filters will be applied.  This can be especially usef
 with the `FilterStrategy::FirstMatch` strategy.  The combination of these two allows you to entirely,
 or selectively, ignore all multi-tenancy for an entity - for a given context, that is.
 
-#### Example with Strict strategy (deny by default)
+#### Example with strict mode (deny by default)
 
-`FilterStrategy::Strict` flips to a "deny by default" model. It processes filters like `AnyMatch` (all matching filters AND'd together), but after processing, if any active `ContextProvider` is not covered by any filter's `context:` array, `1 = 0` is appended — denying all results.
+Setting `strict: true` flips to a "deny by default" model. Filters are processed per the chosen `strategy`, but after processing, if any active `ContextProvider` is not covered by any filter's `context:` array, `1 = 0` is appended — denying all results.
 
-This eliminates the need to explicitly deny every uncovered context. Only contexts that are declared in a filter (even with `ignore: true`) are permitted.
+This eliminates the need to explicitly deny every uncovered context. Only contexts that are declared in a filter (even with `ignore: true`) are permitted. `strict` is orthogonal to `FilterStrategy` — pair it with either `AnyMatch` (default) or `FirstMatch`.
 
 ```php
 use Doctrine\ORM\Mapping as ORM;
@@ -243,7 +243,7 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 
 #[ORM\Entity]
 #[MultiTenancy(
-    strategy: MultiTenancy\FilterStrategy::Strict,
+    strict: true,
     filters: [
         new MultiTenancy\Filter(where: '$this.company_id = {companyId}'),
         new MultiTenancy\Filter(

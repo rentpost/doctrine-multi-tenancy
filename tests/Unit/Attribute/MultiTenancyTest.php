@@ -19,6 +19,7 @@ class MultiTenancyTest extends TestCase
         $this->assertTrue($mt->isEnabled());
         $this->assertSame([], $mt->getFilters());
         $this->assertSame(FilterStrategy::AnyMatch, $mt->getFilterStrategy());
+        $this->assertFalse($mt->isStrict());
     }
 
 
@@ -49,5 +50,13 @@ class MultiTenancyTest extends TestCase
         $mt = new MultiTenancy(strategy: FilterStrategy::FirstMatch);
 
         $this->assertSame(FilterStrategy::FirstMatch, $mt->getFilterStrategy());
+    }
+
+
+    public function testStrict(): void
+    {
+        $mt = new MultiTenancy(strict: true);
+
+        $this->assertTrue($mt->isStrict());
     }
 }

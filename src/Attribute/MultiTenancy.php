@@ -27,6 +27,7 @@ final class MultiTenancy
         private readonly bool $enable = true,
         private readonly array $filters = [],
         private readonly FilterStrategy $strategy = FilterStrategy::AnyMatch,
+        private readonly bool $strict = false,
     ) {}
 
 
@@ -56,5 +57,15 @@ final class MultiTenancy
     public function getFilterStrategy(): FilterStrategy
     {
         return $this->strategy;
+    }
+
+
+    /**
+     * Whether uncovered active contexts should be denied (appending 1 = 0).
+     * Works alongside any FilterStrategy.
+     */
+    public function isStrict(): bool
+    {
+        return $this->strict;
     }
 }

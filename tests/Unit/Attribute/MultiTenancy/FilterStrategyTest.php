@@ -22,14 +22,8 @@ class FilterStrategyTest extends TestCase
     }
 
 
-    public function testStrictCaseExists(): void
-    {
-        $this->assertSame('Strict', FilterStrategy::Strict->name);
-    }
-
-
     public function testCaseCount(): void
     {
-        $this->assertCount(3, FilterStrategy::cases());
+        $this->assertCount(2, FilterStrategy::cases());
     }
 }
