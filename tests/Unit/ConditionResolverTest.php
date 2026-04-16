@@ -11,6 +11,7 @@ use Rentpost\Doctrine\MultiTenancy\KeyValueException;
 use Rentpost\Doctrine\MultiTenancy\Listener;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Book;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\ExternalCatalog;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\FirstMatchWithContextFreeEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Invoice;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\MisconfiguredEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Order;
@@ -146,6 +147,26 @@ class ConditionResolverTest extends TestCase
         // Review: staff filter first, customer filter second, both contextual
         // FirstMatch should only use the staff filter
         $result = $resolver->resolve(Review::class, 't0');
+
+        $this->assertSame('t0.store_id = 42', $result);
+    }
+
+
+    public function testFirstMatchContextFreeFilterShortCircuitsSubsequent(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [new StubContextProvider('customer', true)],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // FirstMatchWithContextFreeEntity: context-free filter first, customer filter second.
+        // Context-free is always contextual → always matches first → subsequent filters
+        // never evaluated, even when their contexts are active.
+        $result = $resolver->resolve(FirstMatchWithContextFreeEntity::class, 't0');
 
         $this->assertSame('t0.store_id = 42', $result);
     }
