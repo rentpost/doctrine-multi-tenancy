@@ -205,7 +205,11 @@ class ConditionResolver
 
 
     /**
-     * Checks whether any active context is not covered by a filter's context array
+     * Checks whether any active context is not covered by a filter's context array.
+     *
+     * A filter with no context array (context-free) is considered to apply to all
+     * contexts — consistent with query-application semantics — so it covers every
+     * active context for the purpose of the strict coverage check.
      *
      * @param FilterAttribute[] $filters
      */
@@ -213,6 +217,10 @@ class ConditionResolver
     {
         $coveredContexts = [];
         foreach ($filters as $filter) {
+            if (!count($filter->getContext())) {
+                return false;
+            }
+
             foreach ($filter->getContext() as $context) {
                 $coveredContexts[$context] = true;
             }

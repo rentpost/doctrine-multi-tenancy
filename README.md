@@ -221,6 +221,12 @@ This eliminates the need to explicitly deny every uncovered context. Only contex
 
 Note: `strict` is orthogonal to `FilterStrategy` — it works with either `AnyMatch` or `FirstMatch`.
 
+#### Context-free filters
+
+A filter with no `context:` array applies to all contexts (as documented earlier), and consistent with that semantic, it also **covers** all contexts for the strict check. So mixing a context-free filter with `strict: true` effectively disables the coverage enforcement — every active context is implicitly covered.
+
+For strict mode to be meaningful, declare a `context:` array on every filter so coverage is explicit. The following example scopes access contextually: managers get company-wide access, admins are permitted without extra conditions (`ignore: true`), and anyone else is denied.
+
 ```php
 use Doctrine\ORM\Mapping as ORM;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
@@ -229,18 +235,13 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 #[MultiTenancy(
     strict: true,
     filters: [
-        new MultiTenancy\Filter(where: '$this.company_id = {companyId}'),
+        new MultiTenancy\Filter(
+            context: ['manager'],
+            where: '$this.company_id = {companyId}',
+        ),
         new MultiTenancy\Filter(
             context: ['admin'],
             ignore: true,
-        ),
-        new MultiTenancy\Filter(
-            context: ['manager'],
-            where: '$this.id IN(
-                SELECT product_id
-                FROM manager_product
-                WHERE manager_id = {managerId}
-            )',
         ),
     ],
 )]
@@ -251,9 +252,8 @@ class Product
 ```
 
 In this example:
-- The `company_id` filter (no context) always applies
-- An `admin` sees company-wide data (ignored filter, but the context is acknowledged as covered)
-- A `manager` gets the additional scoping filter
+- A `manager` sees products scoped to their company
+- An `admin` sees everything (ignored filter, but the context is acknowledged as covered)
 - Any other active context (e.g. `guest`) is automatically denied — no need to add explicit deny filters
 
 #### Ambient Context Providers
