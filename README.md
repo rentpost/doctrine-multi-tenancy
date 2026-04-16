@@ -109,21 +109,6 @@ Using the `Admin` example above, we might return `admin` as an "identifier". The
 
 As with the `ValueHolder`, this will all be more clear when viewing the example attributes below.
 
-#### Ambient Context Providers
-
-Some context providers represent ambient environmental state rather than primary access contexts — for example, "is any role active?" or "is a user logged in?". These are always active and don't represent discrete access levels.
-
-When using `strict: true`, ambient contexts could cause universal denial if they're not defined in a filter's `context:` array. To prevent this, implement `AmbientContextProviderInterface` (a marker interface extending `ContextProviderInterface`) on those providers. Strict mode will skip them during its coverage check.
-
-```php
-use Rentpost\Doctrine\MultiTenancy\AmbientContextProviderInterface;
-
-class UserContextProvider implements AmbientContextProviderInterface
-{
-    // ...
-}
-```
-
 ## Usage
 
 After you've gotten everything setup, the hard part is out of the way. Taking the time to properly evaludate how you'll setup your `ValueHolder` and `ContextProvider` classes will go a long way in making the usage clean and simple.
@@ -185,15 +170,14 @@ class Product
 }
 ```
 
-#### Example with multiple context filters and a strategy
+### Filter Strategies
 
-In the previous examples, we've been using the default `FilterStrategy::AnyMatch`, which means that
-any of the contexts that evaluate as true have had their where clause applied.  In this example, you
-can see that we've applied a `FilterStrategy::FirstMatch`, which means the filter contextual filter
-will be applied - only.
+When multiple filters match the current context, the `FilterStrategy` determines how they combine:
 
-**Keep in mind, if you do not provide a context, it's assumed to be in context, and that filter will
-be applied, meaning any subsequent filters will never be evaluated.**
+- **`FilterStrategy::AnyMatch`** (default) — All matching filters are AND'd together.
+- **`FilterStrategy::FirstMatch`** — Only the first matching filter is applied; subsequent filters are skipped.
+
+**Keep in mind, if you do not provide a context, it's assumed to be in context, and that filter will be applied, meaning any subsequent filters will never be evaluated (under `FirstMatch`).**
 
 ```php
 use Doctrine\ORM\Mapping as ORM;
@@ -203,9 +187,10 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 #[MultiTenancy(
     strategy: MultiTenancy\FilterStrategy::FirstMatch,
     filters: [
-        new MuiltiTenancy\Filter(
-            context: ['admin']
-            where: '$this.company_id = {companyId}'),
+        new MultiTenancy\Filter(
+            context: ['admin'],
+            where: '$this.company_id = {companyId}',
+        ),
         new MultiTenancy\Filter(
             context: ['other'],
             ignore: true,
@@ -215,8 +200,8 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
             where: '$this.id IN(
                 SELECT product_id
                 FROM product_group
-                WHERE status = 'published'
-            )'
+                WHERE status = \'published\'
+            )',
         ),
     ],
 )]
@@ -226,16 +211,15 @@ class Product
 }
 ```
 
-One other thing to note about the above example is the `ignore` parameter.  This allows for you to
-specify a context where no filters will be applied.  This can be especially useful in combination
-with the `FilterStrategy::FirstMatch` strategy.  The combination of these two allows you to entirely,
-or selectively, ignore all multi-tenancy for an entity - for a given context, that is.
+The `ignore` parameter above allows you to specify a context where no filter conditions will be applied. This can be especially useful in combination with `FilterStrategy::FirstMatch`, allowing you to entirely, or selectively, ignore all multi-tenancy for an entity — for a given context.
 
-#### Example with strict mode (deny by default)
+### Strict Mode
 
-Setting `strict: true` flips to a "deny by default" model. Filters are processed per the chosen `strategy`, but after processing, if any active `ContextProvider` is not covered by any filter's `context:` array, `1 = 0` is appended — denying all results.
+Setting `strict: true` flips to a "deny by default" model. Filters are still processed per the chosen `FilterStrategy`, but after processing, if any active `ContextProvider` is not covered by any filter's `context:` array, `1 = 0` is appended — denying all results.
 
-This eliminates the need to explicitly deny every uncovered context. Only contexts that are declared in a filter (even with `ignore: true`) are permitted. `strict` is orthogonal to `FilterStrategy` — pair it with either `AnyMatch` (default) or `FirstMatch`.
+This eliminates the need to explicitly deny every uncovered context. Only contexts that are declared in a filter (even with `ignore: true`) are permitted.
+
+Note: `strict` is orthogonal to `FilterStrategy` — it works with either `AnyMatch` or `FirstMatch`.
 
 ```php
 use Doctrine\ORM\Mapping as ORM;
@@ -271,6 +255,21 @@ In this example:
 - An `admin` sees company-wide data (ignored filter, but the context is acknowledged as covered)
 - A `manager` gets the additional scoping filter
 - Any other active context (e.g. `guest`) is automatically denied — no need to add explicit deny filters
+
+#### Ambient Context Providers
+
+Some context providers represent ambient environmental state rather than primary access contexts — for example, "is any role active?" or "is a user logged in?". These are always active and don't represent discrete access levels.
+
+When using `strict: true`, ambient contexts would cause universal denial since they're never listed in a filter's `context:` array. To prevent this, implement `AmbientContextProviderInterface` (a marker interface extending `ContextProviderInterface`) on those providers. Strict mode will skip them during its coverage check.
+
+```php
+use Rentpost\Doctrine\MultiTenancy\AmbientContextProviderInterface;
+
+class UserContextProvider implements AmbientContextProviderInterface
+{
+    // ...
+}
+```
 
 ## Using ConditionResolver for Raw SQL Queries
 
