@@ -221,6 +221,10 @@ class ConditionResolver
         }
 
         foreach ($this->listener->getContextProviders() as $contextProvider) {
+            if ($contextProvider instanceof AmbientContextProviderInterface) {
+                continue;
+            }
+
             if ($contextProvider->isContextual() && !isset($coveredContexts[$contextProvider->getIdentifier()])) {
                 return true;
             }

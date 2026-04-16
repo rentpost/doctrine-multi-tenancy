@@ -16,10 +16,11 @@ use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\MisconfiguredEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Order;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Product;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Review;
-use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\UnmappedEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\StrictEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\StrictNoContextFreeEntity;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\UnmappedEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Wishlist;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubAmbientContextProvider;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubContextProvider;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubValueHolder;
 
@@ -432,5 +433,47 @@ class ConditionResolverTest extends TestCase
             't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7) AND 1 = 0',
             $result,
         );
+    }
+
+
+    public function testStrictAmbientContextIsSkipped(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+                new StubAmbientContextProvider('role', true),
+                new StubAmbientContextProvider('user', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictEntity: role and user are active but ambient → skipped, no denial
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame('t0.store_id = 42', $result);
+    }
+
+
+    public function testStrictAmbientContextDoesNotMaskUncovered(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+                new StubAmbientContextProvider('role', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictEntity: role is ambient (skipped), but vendor is active and uncovered → denied
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame('t0.store_id = 42 AND 1 = 0', $result);
     }
 }
