@@ -109,6 +109,21 @@ Using the `Admin` example above, we might return `admin` as an "identifier". The
 
 As with the `ValueHolder`, this will all be more clear when viewing the example attributes below.
 
+#### Ambient Context Providers
+
+Some context providers represent ambient environmental state rather than primary access contexts — for example, "is any role active?" or "is a user logged in?". These are always active and don't represent discrete access levels.
+
+When using `FilterStrategy::Strict`, ambient contexts could cause universal denial, if they're not defined in a filter's `context:` array. To prevent this, implement `AmbientContextProviderInterface` (a marker interface extending `ContextProviderInterface`) on those providers. Strict will skip them during its coverage check.
+
+```php
+use Rentpost\Doctrine\MultiTenancy\AmbientContextProviderInterface;
+
+class UserContextProvider implements AmbientContextProviderInterface
+{
+    // ...
+}
+```
+
 ## Usage
 
 After you've gotten everything setup, the hard part is out of the way. Taking the time to properly evaludate how you'll setup your `ValueHolder` and `ContextProvider` classes will go a long way in making the usage clean and simple.
