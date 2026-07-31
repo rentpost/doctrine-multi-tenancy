@@ -7,6 +7,10 @@ namespace Rentpost\Doctrine\MultiTenancy;
 /**
  * Interface for a key/value "value" when being stored with the MultiTenancy\Listener
  *
+ * A ValueHolder is a producer.  It is asked for its value when Listener::refreshValues() is
+ * called, and never while a query is being built, so the value it returns is always one the
+ * Listener has already declared to Doctrine.
+ *
  * @author Jacob Thomason <jacob@rentpost.com>
  */
 interface ValueHolderInterface

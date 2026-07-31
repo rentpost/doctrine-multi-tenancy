@@ -11,7 +11,7 @@ class StubValueHolder implements ValueHolderInterface
 
     public function __construct(
         private readonly string $identifier,
-        private readonly ?string $value,
+        private ?string $value,
     ) {}
 
 
@@ -24,5 +24,14 @@ class StubValueHolder implements ValueHolderInterface
     public function getValue(): ?string
     {
         return $this->value;
+    }
+
+
+    /**
+     * Stands in for the ambient state a real ValueHolder reads changing
+     */
+    public function setValue(?string $value): void
+    {
+        $this->value = $value;
     }
 }

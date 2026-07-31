@@ -33,6 +33,56 @@ class ListenerTest extends TestCase
     }
 
 
+    public function testSetAndGetValues(): void
+    {
+        $listener = new Listener();
+
+        $listener->setValue('storeId', '42');
+        $listener->setValue('authorId', '7');
+
+        $this->assertSame(['storeId' => '42', 'authorId' => '7'], $listener->getValues());
+    }
+
+
+    public function testValueOverwrite(): void
+    {
+        $listener = new Listener();
+
+        $listener->setValue('storeId', '42');
+        $listener->setValue('storeId', '99');
+
+        $this->assertSame(['storeId' => '99'], $listener->getValues());
+    }
+
+
+    public function testRefreshValuesSetsEveryValueHolderValue(): void
+    {
+        $listener = new Listener();
+        $listener->addValueHolder(new StubValueHolder('storeId', '42'));
+        $listener->addValueHolder(new StubValueHolder('authorId', '7'));
+
+        $this->assertSame([], $listener->getValues());
+
+        $listener->refreshValues();
+
+        $this->assertSame(['storeId' => '42', 'authorId' => '7'], $listener->getValues());
+    }
+
+
+    public function testRefreshValuesPicksUpAChangedValue(): void
+    {
+        $valueHolder = new StubValueHolder('storeId', '42');
+        $listener = new Listener();
+        $listener->addValueHolder($valueHolder);
+        $listener->refreshValues();
+
+        $valueHolder->setValue('99');
+        $listener->refreshValues();
+
+        $this->assertSame(['storeId' => '99'], $listener->getValues());
+    }
+
+
     public function testAddAndGetValueHolder(): void
     {
         $listener = new Listener();

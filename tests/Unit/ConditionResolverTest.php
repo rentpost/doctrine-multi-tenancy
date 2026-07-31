@@ -9,6 +9,7 @@ use Rentpost\Doctrine\MultiTenancy\AttributeException;
 use Rentpost\Doctrine\MultiTenancy\ConditionResolver;
 use Rentpost\Doctrine\MultiTenancy\KeyValueException;
 use Rentpost\Doctrine\MultiTenancy\Listener;
+use Rentpost\Doctrine\MultiTenancy\ValueHolderInterface;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Book;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\ExternalCatalog;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\FirstMatchWithContextFreeEntity;
@@ -39,6 +40,9 @@ class ConditionResolverTest extends TestCase
         foreach ($contextProviders as $cp) {
             $listener->addContextProvider($cp);
         }
+
+        // As a consumer does once the ValueHolders are registered, and on every context change
+        $listener->refreshValues();
 
         return $listener;
     }
@@ -314,6 +318,74 @@ class ConditionResolverTest extends TestCase
         $result = $resolver->resolve(Book::class, 't0');
 
         $this->assertSame('t0.store_id = 42', $result);
+    }
+
+
+    public function testSetValueOverridesARefreshedValue(): void
+    {
+        $listener = $this->createListener([
+            new StubValueHolder('storeId', '42'),
+        ]);
+        $listener->setValue('storeId', '99');
+        $resolver = new ConditionResolver($listener);
+
+        $result = $resolver->resolve(Book::class, 't0');
+
+        $this->assertSame('t0.store_id = 99', $result);
+    }
+
+
+    public function testValueHoldersAreNotReadWhileResolving(): void
+    {
+        $valueHolder = $this->createMock(ValueHolderInterface::class);
+        $valueHolder->method('getIdentifier')->willReturn('storeId');
+        $valueHolder->expects($this->once())->method('getValue')->willReturn('42');
+
+        $listener = $this->createListener([$valueHolder]);
+        $resolver = new ConditionResolver($listener);
+
+        // The ValueHolder was read once, by the refresh in createListener(), and must not be read
+        // again by either of these
+        $this->assertSame('t0.store_id = 42', $resolver->resolve(Book::class, 't0'));
+        $this->assertSame('t0.store_id = 42', $resolver->resolve(Book::class, 't0'));
+    }
+
+
+    public function testIdentifierWithNoValueThrowsException(): void
+    {
+        $resolver = new ConditionResolver($this->createListener());
+
+        $this->expectException(KeyValueException::class);
+        $this->expectExceptionMessageMatches('/\{storeId\}.*has no value set/s');
+
+        $resolver->resolve(Book::class, 't0');
+    }
+
+
+    public function testSetValueWithoutValueHolder(): void
+    {
+        $listener = $this->createListener();
+        $listener->setValue('storeId', '42');
+        $resolver = new ConditionResolver($listener);
+
+        $result = $resolver->resolve(Book::class, 't0');
+
+        $this->assertSame('t0.store_id = 42', $result);
+    }
+
+
+    public function testSetNullValueThrowsException(): void
+    {
+        $listener = $this->createListener([
+            new StubValueHolder('storeId', '42'),
+        ]);
+        $listener->setValue('storeId', null);
+        $resolver = new ConditionResolver($listener);
+
+        $this->expectException(KeyValueException::class);
+        $this->expectExceptionMessage('{storeId}');
+
+        $resolver->resolve(Book::class, 't0');
     }
 
 

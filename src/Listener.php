@@ -19,6 +19,15 @@ use Rentpost\Doctrine\MultiTenancy\ContextProviderInterface;
 class Listener implements EventSubscriber
 {
 
+    private ?Filter $filter = null;
+
+    /**
+     * Private so that setValue() stays the only way in, subclasses included
+     *
+     * @var array<string, string|null>
+     */
+    private array $values = [];
+
     /** @var ValueHolderInterface */
     protected array $valueHolders = [];
 
@@ -49,7 +58,72 @@ class Listener implements EventSubscriber
 
 
     /**
+     * Sets the Filter that carries the values into Doctrine
+     *
+     * The Filter calls this itself, the first time it looks up the Listener, so that values set
+     * from then on can be declared to Doctrine straight away.  Doctrine builds a new Filter every
+     * time the filter is enabled after having been disabled, and the new instance takes over here.
+     *
+     * @param Filter $filter
+     */
+    public function setFilter(Filter $filter): void
+    {
+        $this->filter = $filter;
+    }
+
+
+    /**
+     * Sets the value for a given identifier
+     *
+     * This is the only way a value ever changes, and conditions are built from these values
+     * alone, so there is no path by which a value can reach a query without Doctrine being told
+     * about it.  The value is held here, where it outlives any single Filter instance, and is
+     * declared to Doctrine so that SQL memoized for the previous value gets rebuilt.  See
+     * Filter::declareValue() for why that matters.
+     *
+     * @param string $identifier    The identifier, as used in a filter's where clause, without
+     *                              the enclosing curly brackets
+     * @param string|null $value    Value that can be included in a SQL query
+     */
+    public function setValue(string $identifier, ?string $value): void
+    {
+        $this->values[$identifier] = $value;
+        $this->filter?->declareValue($identifier, $value);
+    }
+
+
+    /**
+     * Gets all of the values, keyed by their identifier
+     *
+     * @return array<string, string|null>
+     */
+    public function getValues(): array
+    {
+        return $this->values;
+    }
+
+
+    /**
+     * Sets the value of every ValueHolder
+     *
+     * Call this whenever the ambient context changes, a tenant switch within a long lived process
+     * being the case that matters.  This is the one moment the ValueHolders are asked for a value;
+     * they are producers, never read while a query is being built.
+     */
+    public function refreshValues(): void
+    {
+        foreach ($this->valueHolders as $valueHolder) {
+            assert($valueHolder instanceof ValueHolderInterface);
+
+            $this->setValue($valueHolder->getIdentifier(), $valueHolder->getValue());
+        }
+    }
+
+
+    /**
      * Add a ValueHolder with a given key to the state
+     *
+     * Adding one does not set its value; call refreshValues() for that.
      *
      * @param ValueHolderInterface $valueHolder
      */
