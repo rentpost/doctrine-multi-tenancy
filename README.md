@@ -83,9 +83,27 @@ public function getIdentifier(): string;
 public function getValue(): ?string;
 ```
 
-The example, `User`, above might return `userId` as the "identifier" and the id of that User, represented as a string. It's effectively acting as a key/value store that's lazily loaded, such that, the value can mutate state.
+The example, `User`, above might return `userId` as the "identifier" and the id of that User, represented as a string. A `ValueHolder` is a producer: it is asked for its value when you refresh, and never while a query is being built.
 
 The purpose of this will be more clear when viewing the example attributes below.
+
+#### Setting values
+
+Values live on the `Listener`. Registering a `ValueHolder` does not set one; refreshing does, by asking every registered `ValueHolder` for its current value:
+
+```php
+$multiTenancyListener->refreshValues();
+```
+
+Call this once your `ValueHolder`s are registered, and again whenever the state they read changes, a tenant switch being the usual case. A value can also be set on its own, with no `ValueHolder` involved:
+
+```php
+$multiTenancyListener->setValue('companyId', '42');
+```
+
+The identifier is the same one you use in a filter, without the curly brackets, and the value is a string that can be included in a SQL query. Either way, the value is declared to Doctrine as it is set, which is what keeps Doctrine's memoized SQL in step with it. See [Changing Values Within a Process](#changing-values-within-a-process).
+
+If a filter references an identifier that has no value set, resolving it throws a `KeyValueException` naming that identifier, so a missed refresh shows up at the first query rather than as a condition you did not intend.
 
 #### What is a ContextProvider?
 
@@ -271,6 +289,14 @@ class UserContextProvider implements AmbientContextProviderInterface
 }
 ```
 
+## Changing Values Within a Process
+
+Doctrine memoizes the SQL its persisters generate and rebuilds it only when the hash of the filter collection changes, and that hash is derived from the filters' parameters. Every value set on the `Listener` is declared to Doctrine as a filter parameter, so setting one moves that hash and any SQL memoized against the previous value is rebuilt. Conditions are built from these values and nothing else, so a value cannot reach a query without Doctrine having been told about it first.
+
+This is what makes the library safe wherever one process serves several tenants in turn: a queue worker, a CLI task iterating tenants, an application that switches the acting tenant part way through, or a worker mode runtime such as FrankenPHP, RoadRunner or Swoole, where the process and the `EntityManager` outlive a single request. Call `refreshValues()` when your context changes and the rest follows.
+
+Values live on the `Listener` rather than on the filter, so they also outlive Doctrine rebuilding the filter, which it does every time the filter is enabled after having been disabled. The new filter picks them up on its own the first time it builds a condition.
+
 ## Using ConditionResolver for Raw SQL Queries
 
 The `Filter` class (Doctrine's `SQLFilter`) only applies to DQL queries. For raw SQL queries in repositories, use `ConditionResolver` directly to get the same multi-tenancy conditions:
@@ -289,7 +315,11 @@ $condition = $resolver->resolve(Product::class, 'p');
 $sql = "SELECT p.* FROM product p WHERE {$condition} AND p.status = 'active'";
 ```
 
-The `resolve()` method reads the `#[MultiTenancy]` attribute from the entity class, evaluates the current context via `ContextProviders`, substitutes values from `ValueHolders`, and returns the composed WHERE clause fragment. It uses the same logic as the `Filter` — just without requiring Doctrine's DQL layer.
+The `resolve()` method reads the `#[MultiTenancy]` attribute from the entity class, evaluates the current context via `ContextProviders`, substitutes the values held by the `Listener`, and returns the composed WHERE clause fragment. It uses the same logic as the `Filter`, just without requiring Doctrine's DQL layer.
+
+## Upgrading
+
+Version 2.0 changed when `ValueHolder`s are read. See [UPGRADING.md](UPGRADING.md) for what breaks and what to change.
 
 ## Development
 

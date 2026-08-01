@@ -39,37 +39,59 @@ class ConditionResolver
 
 
     /**
-     * Gets the identifiers and values array maps from the ValueHolders
+     * Gets the identifier of every placeholder used in the given where clause
+     *
+     * @return string[]
+     */
+    private function getPlaceholderIdentifiers(string $whereClause): array
+    {
+        \preg_match_all('/\{([^{}]+)\}/', $whereClause, $matches);
+
+        return \array_unique($matches[1]);
+    }
+
+
+    /**
+     * Gets the identifiers and values array maps for the placeholders a filter uses
+     *
+     * Values come from those set on the Listener and from nowhere else.  ValueHolders are not
+     * read here; they are producers, invoked only by Listener::refreshValues(), so that every
+     * value a condition can be built from has already been declared to Doctrine.
      *
      * @return string[][]
      *
-     * @throws KeyValueException When a filter contains an identifier but the ValueHolder has no value
+     * @throws KeyValueException When a placeholder's identifier has no value set
      */
-    private function getValueHolderIdentifiersAndValues(FilterAttribute $filter, string $entityClassName): array
+    private function getIdentifiersAndValues(FilterAttribute $filter, string $entityClassName): array
     {
+        $setValues = $this->listener->getValues();
         $identifiers = [];
         $values = [];
-        foreach ($this->listener->getValueHolders() as $valueHolder) {
-            assert($valueHolder instanceof ValueHolderInterface);
-
-            $placeholder = '{' . $valueHolder->getIdentifier() . '}';
-            if (!\str_contains($filter->getWhereClause(), $placeholder)) {
-                continue;
-            }
-
-            $value = $valueHolder->getValue();
-
-            if ($value === null) {
+        foreach ($this->getPlaceholderIdentifiers($filter->getWhereClause()) as $identifier) {
+            if (!\array_key_exists($identifier, $setValues)) {
                 throw new KeyValueException(\sprintf(
-                    'Filter identifier, {%s}, in "%s" where clause, for %s, evaluates to null. ' .
-                    'Ensure the ValueHolder has a value set before the filter is applied.',
-                    $valueHolder->getIdentifier(),
+                    'Filter identifier, {%s}, in "%s" where clause, for %s, has no value set. ' .
+                    'Call Listener::refreshValues() whenever the context changes, or set the ' .
+                    'value for this identifier with Listener::setValue().',
+                    $identifier,
                     $filter->getWhereClause(),
                     $entityClassName,
                 ));
             }
 
-            $identifiers[] = '/\{' . $valueHolder->getIdentifier() . '\}/';
+            $value = $setValues[$identifier];
+
+            if ($value === null) {
+                throw new KeyValueException(\sprintf(
+                    'Filter identifier, {%s}, in "%s" where clause, for %s, evaluates to null. ' .
+                    'Ensure a value has been set for the identifier before the filter is applied.',
+                    $identifier,
+                    $filter->getWhereClause(),
+                    $entityClassName,
+                ));
+            }
+
+            $identifiers[] = '/\{' . $identifier . '\}/';
             $values[] = $value;
         }
 
@@ -138,7 +160,7 @@ class ConditionResolver
      * @return string  The WHERE clause fragment (empty string if disabled or no applicable filters)
      *
      * @throws AttributeException  If entity lacks the #[MultiTenancy] attribute
-     * @throws KeyValueException   If a required ValueHolder has no value
+     * @throws KeyValueException   If a placeholder's identifier has no value set on the Listener
      */
     public function resolve(string $entityClass, string $tableAlias): string
     {
@@ -186,7 +208,7 @@ class ConditionResolver
 
             [$identifiers, $values] = $this->getMergedMaps(
                 $defaultMap,
-                ...$this->getValueHolderIdentifiersAndValues($filter, $entityClass),
+                ...$this->getIdentifiersAndValues($filter, $entityClass),
             );
 
             $whereClauses[] = $this->parseWhereClause($filter->getWhereClause(), $identifiers, $values);
