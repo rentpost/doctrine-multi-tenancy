@@ -16,6 +16,8 @@ use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\FirstMatchWithContextFre
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Invoice;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\MisconfiguredEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Order;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\PrivilegedIgnoredEntity;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\PrivilegedScopedEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Product;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Review;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\StrictEntity;
@@ -24,6 +26,7 @@ use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\UnmappedEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Wishlist;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubAmbientContextProvider;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubContextProvider;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubPrivilegedContextProvider;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubValueHolder;
 
 class ConditionResolverTest extends TestCase
@@ -596,5 +599,218 @@ class ConditionResolverTest extends TestCase
             't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7) AND 1 = 0',
             $result,
         );
+    }
+
+
+    public function testPrivilegedContextSuppressesStrictDenial(): void
+    {
+        $listener = $this->createListener(
+            [],
+            [
+                new StubPrivilegedContextProvider('task', true),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictNoContextFreeEntity covers neither of the task's contexts, but a privileged
+        // provider is not a scope the entity could have covered, so it is left out of the
+        // census.  Without the privileged provider this same setup denies with 1 = 0.
+        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+
+        $this->assertSame('', $result);
+    }
+
+
+    public function testPrivilegedContextSkipsContextFreeFilter(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [new StubPrivilegedContextProvider('task', true)],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Book has the one context-free filter, which applies to every tenant.  The task is
+        // not one of them, so nothing is applied.
+        $result = $resolver->resolve(Book::class, 't0');
+
+        $this->assertSame('', $result);
+    }
+
+
+    public function testPrivilegedContextSkipsContextFreeFilterUnderStrict(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [
+                new StubPrivilegedContextProvider('task', true),
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictEntity's context-free filter is skipped, none of its contexts are the task's,
+        // and no other context is active, so the task is unrestricted here
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame('', $result);
+    }
+
+
+    public function testPrivilegedNamedFilterIsApplied(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('publisherId', '15'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubPrivilegedContextProvider('task', true),
+                new StubContextProvider('customer', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // PrivilegedScopedEntity names the task on a filter of its own, so that one applies.
+        // The context-free filter is skipped, and so is the customer filter, contextual as it
+        // is, since it says nothing about the task.
+        $result = $resolver->resolve(PrivilegedScopedEntity::class, 't0');
+
+        $this->assertSame('t0.publisher_id = 15', $result);
+    }
+
+
+    public function testPrivilegedNamedIgnoredFilterShortCircuitsUnderFirstMatch(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [new StubPrivilegedContextProvider('task', true)],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // PrivilegedIgnoredEntity: the ignored task filter comes first and matches, so
+        // FirstMatch breaks there and the task filter behind it is never evaluated
+        $result = $resolver->resolve(PrivilegedIgnoredEntity::class, 't0');
+
+        $this->assertSame('', $result);
+    }
+
+
+    public function testPrivilegedContextFreeFilterNoLongerCoversOtherContexts(): void
+    {
+        $listener = $this->createListener(
+            [],
+            [
+                new StubPrivilegedContextProvider('task', true),
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // StrictEntity's context-free filter is not applied here, so it cannot stand in as
+        // coverage either.  Vendor is active and named nowhere, and is denied as it would be
+        // on an entity with no context-free filter at all.
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame('1 = 0', $result);
+    }
+
+
+    public function testPrivilegedContextLeavesACoveredContextUnrestricted(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('customerId', '7')],
+            [
+                new StubPrivilegedContextProvider('task', true),
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Customer is active and covered, so strict has nothing to deny, and its filter is
+        // skipped along with every other filter that says nothing about the task
+        $result = $resolver->resolve(StrictEntity::class, 't0');
+
+        $this->assertSame('', $result);
+    }
+
+
+    public function testWithoutAPrivilegedProviderNothingChanges(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('publisherId', '15'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubContextProvider('task', false),
+                new StubContextProvider('customer', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // The same entity, resolved for a customer with no privileged provider involved
+        $result = $resolver->resolve(PrivilegedScopedEntity::class, 't0');
+
+        $this->assertSame(
+            't0.store_id = 42 AND t0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
+    }
+
+
+    public function testNonContextualPrivilegedProviderChangesNothing(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('publisherId', '15'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubPrivilegedContextProvider('task', false),
+                new StubContextProvider('customer', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Identical to the run above, privileged provider registered but not contextual
+        $result = $resolver->resolve(PrivilegedScopedEntity::class, 't0');
+
+        $this->assertSame(
+            't0.store_id = 42 AND t0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
+    }
+
+
+    public function testNonContextualPrivilegedProviderStillDeniesUncoveredContexts(): void
+    {
+        $listener = $this->createListener(
+            [],
+            [
+                new StubPrivilegedContextProvider('task', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Vendor is active and uncovered, and the registered privileged provider, contextual
+        // to nothing, does not spare it
+        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+
+        $this->assertSame('1 = 0', $result);
     }
 }

@@ -125,6 +125,8 @@ public function isContextual(): bool;
 
 Using the `Admin` example above, we might return `admin` as an "identifier". The `isContextual` method is responsible for determining if this particular `admin` identifier is consider to be within context, or contextual. In this situation, you might construct this class with a `User` object that has a method called `isAdmin`.
 
+There are three kinds of `ContextProvider`, the one above being the ordinary kind. See [Kinds of ContextProvider](#kinds-of-contextprovider) for the other two and when to reach for them.
+
 As with the `ValueHolder`, this will all be more clear when viewing the example attributes below.
 
 ## Usage
@@ -289,6 +291,58 @@ class UserContextProvider implements AmbientContextProviderInterface
 }
 ```
 
+### Kinds of ContextProvider
+
+Which interface a `ContextProvider` implements decides two separate things: how it drives filters, and whether `strict: true` counts it when checking coverage.
+
+**Primary access contexts** implement `ContextProviderInterface`. This is the ordinary kind, for anything that is a tenancy scope in its own right: a manager, a customer, a guest. A filter naming the context applies while the provider is contextual, and under `strict: true` some filter has to name it or the entity denies it.
+
+**Ambient contexts** implement `AmbientContextProviderInterface`. Use it for an always on, orthogonal fact rather than an access level: "a user is logged in", "any role at all is active". These drive filters exactly as a primary context does, and are simply left out of the strict census, being true regardless of which scope the actor is acting in.
+
+**Privileged contexts** implement `PrivilegedContextProviderInterface`. Use it for an actor that is outside of tenancy altogether rather than a scope within it: a background task, a maintenance process, a system importer. Such an actor has no answer to the question the strict census asks, so it is left out of it too. Beyond that, while a privileged context is contextual, only filters naming a privileged context are applied. Every other filter is skipped, context-free filters included, since a context-free filter scopes the tenants the actor is not one of. The result is an actor that is unrestricted by default, and scoped only where an entity names its context.
+
+| Interface | Drives filters | Counted in the strict census |
+| --- | --- | --- |
+| `ContextProviderInterface` | Filters naming the context apply | Yes |
+| `AmbientContextProviderInterface` | Filters naming the context apply | No |
+| `PrivilegedContextProviderInterface` | Filters naming the context apply, and every filter that does not name one is skipped | No |
+
+```php
+use Rentpost\Doctrine\MultiTenancy\PrivilegedContextProviderInterface;
+
+class TaskContextProvider implements PrivilegedContextProviderInterface
+{
+    // ...
+}
+```
+
+An entity scopes such an actor by naming its context, and only then. Below, everyone else is scoped to their company by the context-free filter, which the task never sees; the task is scoped by the second filter, which names it.
+
+```php
+use Doctrine\ORM\Mapping as ORM;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
+
+#[ORM\Entity]
+#[MultiTenancy(filters: [
+    new MultiTenancy\Filter(where: '$this.company_id = {companyId}'),
+    new MultiTenancy\Filter(
+        context: ['task'],
+        where: '$this.company_id = {companyId}',
+    ),
+])]
+class CreditReport
+{
+  // Whatever
+}
+```
+
+`ignore: true` and `FilterStrategy::FirstMatch` behave as they always do for a filter that names a privileged context, so an ignored filter listed first still stops the ones behind it.
+
+Two things worth being precise about, both of them consequences of the above rather than exceptions to it:
+
+- Contexts other than the privileged one are censused as they always are. A privileged context being contextual spares itself, not everything else, so a strict entity that names no active primary context still denies.
+- A context-free filter covers every context for the strict census only for as long as it is applied. While a privileged context is contextual it is skipped, and a filter that is not applied cannot stand in as coverage for anything.
+
 ## Changing Values Within a Process
 
 Doctrine memoizes the SQL its persisters generate and rebuilds it only when the hash of the filter collection changes, and that hash is derived from the filters' parameters. Every value set on the `Listener` is declared to Doctrine as a filter parameter, so setting one moves that hash and any SQL memoized against the previous value is rebuilt. Conditions are built from these values and nothing else, so a value cannot reach a query without Doctrine having been told about it first.
@@ -319,7 +373,7 @@ The `resolve()` method reads the `#[MultiTenancy]` attribute from the entity cla
 
 ## Upgrading
 
-Version 2.0 changed when `ValueHolder`s are read. See [UPGRADING.md](UPGRADING.md) for what breaks and what to change.
+Version 2.0 changed when `ValueHolder`s are read. See [UPGRADING.md](UPGRADING.md) for what breaks and what to change. Version 2.1 added `PrivilegedContextProviderInterface` and nothing else, so there is nothing to do for it.
 
 ## Development
 
