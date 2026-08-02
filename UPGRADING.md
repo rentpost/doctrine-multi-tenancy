@@ -1,9 +1,5 @@
 # Upgrading
 
-## 2.0 to 2.1
-
-Nothing to do. 2.1 adds `PrivilegedContextProviderInterface`, a marker interface for a `ContextProvider` representing an actor outside of tenancy, and nothing else. Until one of your providers implements it, and is contextual, conditions resolve exactly as they did in 2.0. See [Kinds of ContextProvider](README.md#kinds-of-contextprovider) for what implementing it does.
-
 ## 1.x to 2.0
 
 ### What changed

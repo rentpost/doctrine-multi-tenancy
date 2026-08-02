@@ -373,7 +373,7 @@ The `resolve()` method reads the `#[MultiTenancy]` attribute from the entity cla
 
 ## Upgrading
 
-Version 2.0 changed when `ValueHolder`s are read. See [UPGRADING.md](UPGRADING.md) for what breaks and what to change. Version 2.1 added `PrivilegedContextProviderInterface` and nothing else, so there is nothing to do for it.
+Version 2.0 changed when `ValueHolder`s are read. See [UPGRADING.md](UPGRADING.md) for what breaks and what to change.
 
 ## Development
 
