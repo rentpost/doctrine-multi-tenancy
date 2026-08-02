@@ -2,6 +2,8 @@
 
 ## 1.x to 2.0
 
+Two things changed: when `ValueHolder`s are read, and how an entity declares the actors it serves.
+
 ### What changed
 
 `ValueHolder`s are no longer read while a query is being built. They are producers now, asked for their value when you call `Listener::refreshValues()`. Conditions are built from the values held by the `Listener`, and each of those values is declared to Doctrine as a filter parameter as it is set.
@@ -37,3 +39,39 @@ For where to put the refresh: anywhere your application already knows its contex
 - A filter referencing an identifier with no value set now throws `KeyValueException`. Previously the placeholder was left in the SQL, which failed later and far less clearly.
 - `ConditionResolver` keeps its signature, `new ConditionResolver($listener)`, and now reads the same values, so conditions built for raw SQL and conditions built for DQL cannot disagree.
 - Values live on the `Listener`, so they outlive Doctrine rebuilding the filter, which happens every time the filter is enabled after having been disabled. Nothing has to be set again after such a cycle.
+
+### `strict` is now `permissive`, inverted
+
+`strict: true` becomes `permissive: false`, and `strict: false` becomes `permissive: true`:
+
+```php
+#[MultiTenancy(permissive: false, filters: [...])]
+```
+
+The rename is not cosmetic. The safe declaration is the shorter one now, where the secure choice used to cost the extra typing, and `permissive: true` greps as the security exception it is, where `strict: false` read as an absence and blended in.
+
+`strict` keeps working for this release, emitting an `E_USER_DEPRECATED` notice, and is removed in 3.0. It holds its place in the attribute's signature, so positional use keeps its meaning. Passing both `strict` and `permissive` throws an `AttributeException`, the two being inverses of one another.
+
+`MultiTenancy::isStrict()` is deprecated alongside it. `isPermissive()` replaces it and returns `null` for an entity that declares neither way, which `isStrict()` cannot express.
+
+### What an entity that declares neither way gets
+
+`Listener::setPermissiveDefault(bool)` says what becomes of an actor an entity has not declared, for every entity that declares neither way itself:
+
+```php
+$multiTenancyListener->setPermissiveDefault(false);
+```
+
+`true` serves such an actor unrestricted, which is the 2.x default and preserves the behaviour of every entity written before any of this. `false` denies it, which is what an entity's filters read as declaring, and becomes the default in 3.0. The setter remains in 3.0 as the escape.
+
+Nothing changes until you call it. While you have not, an entity resolving permissively only for the want of a decision emits an `E_USER_DEPRECATED` notice naming itself and the context it fell through on, once for each entity and context pair:
+
+```
+App\Entity\Invoice resolved with no filter covering the active "customer" context. This
+currently grants unrestricted access and will deny by default in 3.0. Declare a filter for it,
+or call Listener::setPermissiveDefault() to make the choice explicit.
+```
+
+Read as a list, those notices are the migration, including the cases no static read of your entities can find. Declare a filter for what should be scoped, mark `permissive: true` what genuinely is not scoped by who is asking, then call `setPermissiveDefault()` to say you are done.
+
+Calling it with either value silences the notice for good. What is deprecated is leaving the outcome to a default that is about to change, not permissiveness itself: an explicit `true` is a decision, and stays supported indefinitely.

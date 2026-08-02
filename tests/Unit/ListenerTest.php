@@ -148,6 +148,26 @@ class ListenerTest extends TestCase
     }
 
 
+    public function testPermissiveDefaultsToTrue(): void
+    {
+        $listener = new Listener();
+
+        $this->assertTrue($listener->isPermissiveDefault());
+    }
+
+
+    public function testSetPermissiveDefault(): void
+    {
+        $listener = new Listener();
+
+        $listener->setPermissiveDefault(false);
+        $this->assertFalse($listener->isPermissiveDefault());
+
+        $listener->setPermissiveDefault(true);
+        $this->assertTrue($listener->isPermissiveDefault());
+    }
+
+
     public function testValueHolderOverwrite(): void
     {
         $listener = new Listener();

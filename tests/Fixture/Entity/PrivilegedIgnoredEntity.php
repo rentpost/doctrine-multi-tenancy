@@ -8,7 +8,7 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\FilterStrategy;
 
 #[MultiTenancy(
-    strict: true,
+    permissive: false,
     strategy: FilterStrategy::FirstMatch,
     filters: [
         new MultiTenancy\Filter(

@@ -7,7 +7,7 @@ namespace Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity;
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
 
 #[MultiTenancy(
-    strict: true,
+    permissive: false,
     filters: [
         new MultiTenancy\Filter(where: '$this.store_id = {storeId}'),
         new MultiTenancy\Filter(

@@ -14,19 +14,25 @@ use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Book;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\ExternalCatalog;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\FirstMatchWithContextFreeEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Invoice;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\LegacyStrictEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\MisconfiguredEntity;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\NonPermissiveEntity;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\NonPermissiveNoContextFreeEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Order;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\PermissiveEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\PrivilegedIgnoredEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\PrivilegedScopedEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Product;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\RestrictedIgnoredEntity;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\RestrictedScopedEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Review;
-use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\StrictEntity;
-use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\StrictNoContextFreeEntity;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\UndeclaredEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\UnmappedEntity;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity\Wishlist;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubAmbientContextProvider;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubContextProvider;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubPrivilegedContextProvider;
+use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubRestrictedContextProvider;
 use Rentpost\Doctrine\MultiTenancy\Tests\Fixture\StubValueHolder;
 
 class ConditionResolverTest extends TestCase
@@ -48,6 +54,44 @@ class ConditionResolverTest extends TestCase
         $listener->refreshValues();
 
         return $listener;
+    }
+
+
+    /**
+     * Runs the given work with the deprecation notices it emits collected rather than raised
+     *
+     * @return string[]
+     */
+    private function collectDeprecations(callable $work): array
+    {
+        $deprecations = [];
+        set_error_handler(
+            function (int $errno, string $message) use (&$deprecations): bool {
+                $deprecations[] = $message;
+
+                return true;
+            },
+            E_USER_DEPRECATED,
+        );
+
+        try {
+            $work();
+        } finally {
+            restore_error_handler();
+        }
+
+        return $deprecations;
+    }
+
+
+    /**
+     * Reduces a fall-through notice to the entity and context pair it reports on
+     */
+    private function summarizeFallThrough(string $deprecation): string
+    {
+        preg_match('/Entity\\\\(\w+) resolved with no filter covering the active "(\w+)"/', $deprecation, $matches);
+
+        return $matches[1] . '::' . $matches[2];
     }
 
 
@@ -253,7 +297,7 @@ class ConditionResolverTest extends TestCase
         ]);
         $resolver = new ConditionResolver($listener);
 
-        // Book has a filter with empty context — should always apply
+        // Book has a filter with empty context, so it should always apply
         $result = $resolver->resolve(Book::class, 't0');
 
         $this->assertSame('t0.store_id = 42', $result);
@@ -317,7 +361,7 @@ class ConditionResolverTest extends TestCase
         ]);
         $resolver = new ConditionResolver($listener);
 
-        // Should not throw despite null value — identifier not used in where clause
+        // Should not throw despite null value, the identifier not being used in the where clause
         $result = $resolver->resolve(Book::class, 't0');
 
         $this->assertSame('t0.store_id = 42', $result);
@@ -424,7 +468,7 @@ class ConditionResolverTest extends TestCase
     }
 
 
-    public function testStrictCoveredContextAppliesNormally(): void
+    public function testNonPermissiveCoveredContextAppliesNormally(): void
     {
         $listener = $this->createListener(
             [
@@ -439,8 +483,8 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity: customer is covered and active → normal filters, no denial
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        // NonPermissiveEntity: customer is covered and active → normal filters, no denial
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
 
         $this->assertSame(
             't0.store_id = 42 AND t0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
@@ -449,7 +493,7 @@ class ConditionResolverTest extends TestCase
     }
 
 
-    public function testStrictIgnoredContextIsCovered(): void
+    public function testNonPermissiveIgnoredContextIsCovered(): void
     {
         $listener = $this->createListener(
             [new StubValueHolder('storeId', '42')],
@@ -461,14 +505,14 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity: staff is active and covered (listed via ignore: true filter, also via context-free) → no denial
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        // NonPermissiveEntity: staff is active and covered (listed via ignore: true filter, also via context-free) → no denial
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
 
         $this->assertSame('t0.store_id = 42', $result);
     }
 
 
-    public function testStrictContextFreeFilterCoversAllContexts(): void
+    public function testNonPermissiveContextFreeFilterCoversAllContexts(): void
     {
         $listener = $this->createListener(
             [new StubValueHolder('storeId', '42')],
@@ -481,16 +525,16 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity has a context-free filter which, consistent with "applies to all",
+        // NonPermissiveEntity has a context-free filter which, consistent with "applies to all",
         // also covers all contexts. Vendor is active and not explicitly listed, but the
-        // context-free filter means strict has nothing to enforce.
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        // context-free filter means there is nothing left uncovered to deny.
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
 
         $this->assertSame('t0.store_id = 42', $result);
     }
 
 
-    public function testStrictUncoveredContextDenied(): void
+    public function testNonPermissiveUncoveredContextDenied(): void
     {
         $listener = $this->createListener(
             [],
@@ -502,15 +546,15 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictNoContextFreeEntity has only contextual filters. Vendor is active but
+        // NonPermissiveNoContextFreeEntity has only contextual filters. Vendor is active but
         // not in any filter's context → denied.
-        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+        $result = $resolver->resolve(NonPermissiveNoContextFreeEntity::class, 't0');
 
         $this->assertSame('1 = 0', $result);
     }
 
 
-    public function testStrictNoActiveContextUsesContextFreeFilters(): void
+    public function testNonPermissiveNoActiveContextUsesContextFreeFilters(): void
     {
         $listener = $this->createListener(
             [new StubValueHolder('storeId', '42')],
@@ -522,14 +566,14 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity: no context active → only context-free filters, no denial
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        // NonPermissiveEntity: no context active → only context-free filters, no denial
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
 
         $this->assertSame('t0.store_id = 42', $result);
     }
 
 
-    public function testStrictMultipleActiveContextsOneCovered(): void
+    public function testNonPermissiveMultipleActiveContextsOneCovered(): void
     {
         $listener = $this->createListener(
             [
@@ -544,8 +588,8 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictNoContextFreeEntity: customer covered, vendor NOT → denied
-        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+        // NonPermissiveNoContextFreeEntity: customer covered, vendor NOT → denied
+        $result = $resolver->resolve(NonPermissiveNoContextFreeEntity::class, 't0');
 
         $this->assertSame(
             't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7) AND 1 = 0',
@@ -554,7 +598,7 @@ class ConditionResolverTest extends TestCase
     }
 
 
-    public function testStrictAmbientContextIsSkipped(): void
+    public function testNonPermissiveAmbientContextIsSkipped(): void
     {
         $listener = $this->createListener(
             [new StubValueHolder('customerId', '7')],
@@ -567,9 +611,9 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictNoContextFreeEntity: customer covered and active. Ambients (role, user)
+        // NonPermissiveNoContextFreeEntity: customer covered and active. Ambients (role, user)
         // active but skipped during coverage check. No denial.
-        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+        $result = $resolver->resolve(NonPermissiveNoContextFreeEntity::class, 't0');
 
         $this->assertSame(
             't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
@@ -578,7 +622,7 @@ class ConditionResolverTest extends TestCase
     }
 
 
-    public function testStrictAmbientContextDoesNotMaskUncovered(): void
+    public function testNonPermissiveAmbientContextDoesNotMaskUncovered(): void
     {
         $listener = $this->createListener(
             [new StubValueHolder('customerId', '7')],
@@ -591,9 +635,9 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictNoContextFreeEntity: role is ambient (skipped), customer covered,
+        // NonPermissiveNoContextFreeEntity: role is ambient (skipped), customer covered,
         // but vendor is active and uncovered → denied
-        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+        $result = $resolver->resolve(NonPermissiveNoContextFreeEntity::class, 't0');
 
         $this->assertSame(
             't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7) AND 1 = 0',
@@ -602,7 +646,7 @@ class ConditionResolverTest extends TestCase
     }
 
 
-    public function testPrivilegedContextSuppressesStrictDenial(): void
+    public function testPrivilegedContextSuppressesDenial(): void
     {
         $listener = $this->createListener(
             [],
@@ -614,10 +658,10 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictNoContextFreeEntity covers neither of the task's contexts, but a privileged
+        // NonPermissiveNoContextFreeEntity covers neither of the task's contexts, but a privileged
         // provider is not a scope the entity could have covered, so it is left out of the
         // census.  Without the privileged provider this same setup denies with 1 = 0.
-        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+        $result = $resolver->resolve(NonPermissiveNoContextFreeEntity::class, 't0');
 
         $this->assertSame('', $result);
     }
@@ -639,7 +683,7 @@ class ConditionResolverTest extends TestCase
     }
 
 
-    public function testPrivilegedContextSkipsContextFreeFilterUnderStrict(): void
+    public function testPrivilegedContextSkipsContextFreeFilterWhenNonPermissive(): void
     {
         $listener = $this->createListener(
             [new StubValueHolder('storeId', '42')],
@@ -652,9 +696,9 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity's context-free filter is skipped, none of its contexts are the task's,
+        // NonPermissiveEntity's context-free filter is skipped, none of its contexts are the task's,
         // and no other context is active, so the task is unrestricted here
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
 
         $this->assertSame('', $result);
     }
@@ -714,10 +758,10 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // StrictEntity's context-free filter is not applied here, so it cannot stand in as
+        // NonPermissiveEntity's context-free filter is not applied here, so it cannot stand in as
         // coverage either.  Vendor is active and named nowhere, and is denied as it would be
         // on an entity with no context-free filter at all.
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
 
         $this->assertSame('1 = 0', $result);
     }
@@ -736,9 +780,9 @@ class ConditionResolverTest extends TestCase
         );
         $resolver = new ConditionResolver($listener);
 
-        // Customer is active and covered, so strict has nothing to deny, and its filter is
+        // Customer is active and covered, so there is nothing to deny, and its filter is
         // skipped along with every other filter that says nothing about the task
-        $result = $resolver->resolve(StrictEntity::class, 't0');
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
 
         $this->assertSame('', $result);
     }
@@ -809,8 +853,415 @@ class ConditionResolverTest extends TestCase
 
         // Vendor is active and uncovered, and the registered privileged provider, contextual
         // to nothing, does not spare it
-        $result = $resolver->resolve(StrictNoContextFreeEntity::class, 't0');
+        $result = $resolver->resolve(NonPermissiveNoContextFreeEntity::class, 't0');
 
         $this->assertSame('1 = 0', $result);
+    }
+
+
+    public function testRestrictedContextDeniesAnUndeclaredEntity(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [new StubRestrictedContextProvider('visitor', true)],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Book has the one context-free filter, which scopes the tenants it serves rather than
+        // saying it serves a visitor.  Nothing names the visitor, so the store filter that would
+        // otherwise have applied is displaced by a denial.
+        $result = $resolver->resolve(Book::class, 't0');
+
+        $this->assertSame('1 = 0', $result);
+    }
+
+
+    public function testRestrictedContextDeniesANonPermissiveEntity(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [
+                new StubRestrictedContextProvider('visitor', true),
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // The same denial on a non-permissive entity.  The flag has no say either way; a restricted
+        // actor is denied by its own rule rather than by the coverage census.
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
+
+        $this->assertSame('1 = 0', $result);
+    }
+
+
+    public function testRestrictedContextDeniesAlongsideACoveredContext(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubRestrictedContextProvider('visitor', true),
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Customer is active and named, and would ordinarily contribute its clause.  The visitor
+        // is named nowhere, and one restricted actor being contextual denies the whole query.
+        $result = $resolver->resolve(NonPermissiveEntity::class, 't0');
+
+        $this->assertSame('1 = 0', $result);
+    }
+
+
+    public function testRestrictedNamedFilterIsApplied(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubRestrictedContextProvider('visitor', true),
+                new StubContextProvider('customer', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // RestrictedScopedEntity names the visitor on a filter of its own, so it serves one, and
+        // every filter then applies as it would for anybody else: the context-free one scopes
+        // the store, the visitor's own filter scopes what a visitor may see, and the customer
+        // filter is skipped for not being contextual.
+        $result = $resolver->resolve(RestrictedScopedEntity::class, 't0');
+
+        $this->assertSame('t0.store_id = 42 AND t0.is_published = 1', $result);
+    }
+
+
+    public function testRestrictedContextDoesNotDenyADisabledEntity(): void
+    {
+        $listener = $this->createListener(
+            [],
+            [new StubRestrictedContextProvider('visitor', true)],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // ExternalCatalog has multi-tenancy disabled, which is an entity saying it is not
+        // scoped by tenant at all.  There are no actors to serve there, so none to deny.
+        $result = $resolver->resolve(ExternalCatalog::class, 't0');
+
+        $this->assertSame('', $result);
+    }
+
+
+    public function testRestrictedNamedIgnoredFilterShortCircuitsUnderFirstMatch(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [new StubRestrictedContextProvider('visitor', true)],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // RestrictedIgnoredEntity: the ignored visitor filter comes first and matches, so
+        // FirstMatch breaks there and the visitor filter behind it is never evaluated.  Naming
+        // the context on an ignored filter is how an entity leaves the actor unrestricted.
+        $result = $resolver->resolve(RestrictedIgnoredEntity::class, 't0');
+
+        $this->assertSame('', $result);
+    }
+
+
+    public function testWithoutARestrictedProviderNothingChanges(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubContextProvider('visitor', false),
+                new StubContextProvider('customer', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // The same entity, resolved for a customer with no restricted provider involved
+        $result = $resolver->resolve(RestrictedScopedEntity::class, 't0');
+
+        $this->assertSame(
+            't0.store_id = 42 AND t0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
+    }
+
+
+    public function testNonContextualRestrictedProviderChangesNothing(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubRestrictedContextProvider('visitor', false),
+                new StubContextProvider('customer', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Identical to the run above, restricted provider registered but not contextual
+        $result = $resolver->resolve(RestrictedScopedEntity::class, 't0');
+
+        $this->assertSame(
+            't0.store_id = 42 AND t0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
+    }
+
+
+    public function testRestrictedContextDeniesAlongsideAPrivilegedOne(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('storeId', '42')],
+            [
+                new StubPrivilegedContextProvider('task', true),
+                new StubRestrictedContextProvider('visitor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Denial wins.  The task alone leaves Book unrestricted, resolving to an empty string,
+        // and the visitor being contextual as well denies instead.
+        $result = $resolver->resolve(Book::class, 't0');
+
+        $this->assertSame('1 = 0', $result);
+    }
+
+
+    public function testRestrictedContextIsServedAlongsideAPrivilegedOne(): void
+    {
+        $listener = $this->createListener(
+            [
+                new StubValueHolder('storeId', '42'),
+                new StubValueHolder('customerId', '7'),
+            ],
+            [
+                new StubPrivilegedContextProvider('task', true),
+                new StubRestrictedContextProvider('visitor', true),
+                new StubContextProvider('customer', false),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Denial winning makes the actor the restricted one throughout, so this resolves exactly
+        // as it does for a visitor on its own.  Were it the privileged actor instead, every
+        // filter that says nothing about the task would have been skipped, leaving an empty
+        // string and an unrestricted query.
+        $result = $resolver->resolve(RestrictedScopedEntity::class, 't0');
+
+        $this->assertSame('t0.store_id = 42 AND t0.is_published = 1', $result);
+    }
+
+
+    public function testPermissiveEntityIsUnrestrictedByAnUncoveredContext(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('customerId', '7')],
+            [
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // PermissiveEntity is NonPermissiveNoContextFreeEntity with the flag the other way up.
+        // Vendor is active and named nowhere, and is served rather than denied.  The identical
+        // setup on the non-permissive entity appends 1 = 0.
+        $result = $resolver->resolve(PermissiveEntity::class, 't0');
+
+        $this->assertSame(
+            't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
+    }
+
+
+    public function testLegacyStrictArgumentDeniesAndIsDeprecated(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('customerId', '7')],
+            [
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // strict: true still resolves exactly as permissive: false does, and says so
+        $result = null;
+        $deprecations = $this->collectDeprecations(function () use ($resolver, &$result): void {
+            $result = $resolver->resolve(LegacyStrictEntity::class, 't0');
+        });
+
+        $this->assertSame(
+            't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7) AND 1 = 0',
+            $result,
+        );
+        $this->assertCount(1, $deprecations);
+        $this->assertStringContainsString('"strict" argument is deprecated', $deprecations[0]);
+        $this->assertStringContainsString('Use "permissive: false"', $deprecations[0]);
+    }
+
+
+    public function testPermissiveDefaultOfFalseDeniesAnEntityDeclaringNeitherWay(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('customerId', '7')],
+            [
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $listener->setPermissiveDefault(false);
+        $resolver = new ConditionResolver($listener);
+
+        $result = null;
+        $deprecations = $this->collectDeprecations(function () use ($resolver, &$result): void {
+            $result = $resolver->resolve(UndeclaredEntity::class, 't0');
+        });
+
+        $this->assertSame(
+            't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7) AND 1 = 0',
+            $result,
+        );
+        $this->assertSame([], $deprecations);
+    }
+
+
+    public function testPermissiveDefaultOfTrueServesAnEntityDeclaringNeitherWay(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('customerId', '7')],
+            [
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $listener->setPermissiveDefault(true);
+        $resolver = new ConditionResolver($listener);
+
+        // The same entity, the same fall-through, and a consumer who has said this is what they
+        // want.  Nothing to warn about, now or in 3.0.
+        $result = null;
+        $deprecations = $this->collectDeprecations(function () use ($resolver, &$result): void {
+            $result = $resolver->resolve(UndeclaredEntity::class, 't0');
+        });
+
+        $this->assertSame(
+            't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
+        $this->assertSame([], $deprecations);
+    }
+
+
+    public function testFallThroughIsDeprecatedWhileNoDefaultHasBeenSet(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('customerId', '7')],
+            [
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // No decision made, so the entity falls through on a default that is about to change,
+        // and the notice names what fell through and where
+        $result = null;
+        $deprecations = $this->collectDeprecations(function () use ($resolver, &$result): void {
+            $result = $resolver->resolve(UndeclaredEntity::class, 't0');
+        });
+
+        $this->assertSame(
+            't0.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = 7)',
+            $result,
+        );
+        $this->assertCount(1, $deprecations);
+        $this->assertStringContainsString(
+            'UndeclaredEntity resolved with no filter covering the active "vendor" context',
+            $deprecations[0],
+        );
+        $this->assertStringContainsString('Listener::setPermissiveDefault()', $deprecations[0]);
+    }
+
+
+    public function testFallThroughIsNotDeprecatedForAnEntityDeclaringItselfPermissive(): void
+    {
+        $listener = $this->createListener(
+            [new StubValueHolder('customerId', '7')],
+            [
+                new StubContextProvider('customer', true),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // The entity has made the choice itself and resolves the same way in 3.0, so there is
+        // nothing for it to act on
+        $deprecations = $this->collectDeprecations(function () use ($resolver): void {
+            $resolver->resolve(PermissiveEntity::class, 't0');
+        });
+
+        $this->assertSame([], $deprecations);
+    }
+
+
+    public function testFallThroughIsDeprecatedOncePerEntityAndContextPair(): void
+    {
+        $listener = $this->createListener(
+            [],
+            [
+                new StubContextProvider('staff', false),
+                new StubContextProvider('customer', false),
+                new StubContextProvider('publisher', false),
+                new StubContextProvider('vendor', true),
+                new StubContextProvider('guest', true),
+            ],
+        );
+        $resolver = new ConditionResolver($listener);
+
+        // Two uncovered contexts on one entity is two notices, and running the same query again
+        // is none: what a consumer wants is the migration list, not a line per query
+        $deprecations = $this->collectDeprecations(function () use ($resolver): void {
+            $resolver->resolve(UndeclaredEntity::class, 't0');
+            $resolver->resolve(UndeclaredEntity::class, 't0');
+            $resolver->resolve(Review::class, 't0');
+            $resolver->resolve(Review::class, 't0');
+        });
+
+        $this->assertCount(4, $deprecations);
+        $this->assertSame(
+            [
+                'UndeclaredEntity::vendor',
+                'UndeclaredEntity::guest',
+                'Review::vendor',
+                'Review::guest',
+            ],
+            array_map($this->summarizeFallThrough(...), $deprecations),
+        );
     }
 }

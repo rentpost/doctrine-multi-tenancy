@@ -14,8 +14,8 @@ namespace Rentpost\Doctrine\MultiTenancy;
  * - Only filters naming one of the privileged contexts are applied. Every other filter is
  *   skipped, context-free filters included, since a context-free filter scopes the tenants
  *   the actor is not one of.
- * - The provider is excluded from the Strict coverage enforcement, as ambient providers are,
- *   so its being active never denies anything on its own.
+ * - The provider is excluded from the coverage census, as ambient providers are, so its being
+ *   active never denies anything on its own.
  *
  * The result is an actor that is unrestricted by default, and scoped only where an entity
  * names its context on a filter.
