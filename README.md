@@ -29,7 +29,7 @@ Starting in version 3.0, this plugin will deny any context that an entity has no
 $multiTenancyListener->setPermissiveDefault(false);
 ```
 
-Call it during setup, before any query is built. Until you call it, any entity that resolves permissively only because no choice was made emits an `E_USER_DEPRECATED` notice. The notice fires once for each entity and context pair, so your logs hand you the migration list:
+Call it during setup, before any query is built. Until you call it, any entity that resolves permissively, only because no choice was made, emits an `E_USER_DEPRECATED` notice. The notice fires once for each entity and context pair, so your logs hand you the migration list:
 
 ```
 App\Entity\Invoice resolved with no filter covering the active "customer" context. This
@@ -37,7 +37,7 @@ currently grants unrestricted access and will deny by default in 3.0. Declare a 
 or call Listener::setPermissiveDefault() to make the choice explicit.
 ```
 
-Calling `setPermissiveDefault()` with either value silences the notice for good. What is deprecated is leaving the outcome to a default that is about to change. Permissiveness itself is not deprecated, and it stays supported indefinitely, both through this setter and through `permissive: true` on an individual entity.
+Calling `setPermissiveDefault()` with either value silences the notice for good. What is deprecated, is leaving the outcome to a default that is about to change. Permissiveness, itself, is not deprecated, and it stays supported indefinitely, both through this setter and through `permissive: true` on an individual entity.
 
 ## The Two Parts of a Filter
 
