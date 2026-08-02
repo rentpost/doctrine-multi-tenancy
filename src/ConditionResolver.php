@@ -12,7 +12,7 @@ use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\FilterStrategy;
  * Resolves multi-tenancy SQL conditions for a given entity class.
  *
  * This class extracts the SQL generation logic from the Doctrine SQLFilter so it can be
- * used independently — e.g. in raw SQL repository queries that bypass Doctrine's DQL layer.
+ * used independently, e.g. in raw SQL repository queries that bypass Doctrine's DQL layer.
  *
  * @author Jacob Thomason <jacob@rentpost.com>
  */
@@ -118,6 +118,30 @@ class ConditionResolver
 
 
     /**
+     * Gets the identifier of every contextual provider implementing the given marker interface
+     *
+     * @param class-string<ContextProviderInterface> $markerInterface
+     *
+     * @return string[]
+     */
+    private function getContextualIdentifiers(string $markerInterface): array
+    {
+        $identifiers = [];
+        foreach ($this->listener->getContextProviders() as $contextProvider) {
+            if (!$contextProvider instanceof $markerInterface) {
+                continue;
+            }
+
+            if ($contextProvider->isContextual()) {
+                $identifiers[] = $contextProvider->getIdentifier();
+            }
+        }
+
+        return $identifiers;
+    }
+
+
+    /**
      * Gets the identifier of every privileged context provider that is currently contextual
      *
      * A privileged provider represents an actor outside of tenancy rather than a scope within
@@ -128,18 +152,22 @@ class ConditionResolver
      */
     private function getPrivilegedContexts(): array
     {
-        $privilegedContexts = [];
-        foreach ($this->listener->getContextProviders() as $contextProvider) {
-            if (!$contextProvider instanceof PrivilegedContextProviderInterface) {
-                continue;
-            }
+        return $this->getContextualIdentifiers(PrivilegedContextProviderInterface::class);
+    }
 
-            if ($contextProvider->isContextual()) {
-                $privilegedContexts[] = $contextProvider->getIdentifier();
-            }
-        }
 
-        return $privilegedContexts;
+    /**
+     * Gets the identifier of every restricted context provider that is currently contextual
+     *
+     * A restricted provider represents an actor an entity has to serve deliberately, so while
+     * one of them is contextual the entity either names it on a filter or denies it outright.
+     * See RestrictedContextProviderInterface.
+     *
+     * @return string[]
+     */
+    private function getRestrictedContexts(): array
+    {
+        return $this->getContextualIdentifiers(RestrictedContextProviderInterface::class);
     }
 
 
@@ -239,9 +267,23 @@ class ConditionResolver
             ));
         }
 
+        $privilegedContexts = $this->getPrivilegedContexts();
+        $restrictedContexts = $this->getRestrictedContexts();
+
+        if (count($restrictedContexts)) {
+            if (!$this->hasRestrictedCoverage($filters, $restrictedContexts)) {
+                return '1 = 0';
+            }
+
+            // Denial wins where an actor is privileged and restricted at once.  This entity
+            // names the restricted context, so it serves the actor, and it does so on the same
+            // terms as any other: nothing here is exempt from a filter the way a privileged
+            // actor is.
+            $privilegedContexts = [];
+        }
+
         $whereClauses = [];
         $defaultMap = $this->getDefaultMap($tableAlias);
-        $privilegedContexts = $this->getPrivilegedContexts();
         foreach ($filters as $filter) {
             assert($filter instanceof FilterAttribute);
 
@@ -269,8 +311,20 @@ class ConditionResolver
             }
         }
 
-        if ($multiTenancy->isStrict() && $this->hasUncoveredContexts($filters, $privilegedContexts)) {
-            $whereClauses[] = '1 = 0';
+        $permissive = $multiTenancy->isPermissive();
+        $uncoveredContexts = $this->getUncoveredContexts($filters, $privilegedContexts);
+
+        if (count($uncoveredContexts)) {
+            if (!($permissive ?? $this->listener->isPermissiveDefault())) {
+                $whereClauses[] = '1 = 0';
+            } elseif ($permissive === null) {
+                // Only an entity declaring neither way is falling through on a default that is
+                // about to change.  One declaring itself permissive resolves the same way in 3.0
+                // and has nothing to be warned about.
+                foreach ($uncoveredContexts as $context) {
+                    $this->listener->deprecatePermissiveFallThrough($entityClass, $context);
+                }
+            }
         }
 
         return implode(' AND ', $whereClauses);
@@ -278,29 +332,62 @@ class ConditionResolver
 
 
     /**
-     * Checks whether any active context is not covered by a filter's context array.
+     * Checks whether any filter names one of the restricted contexts that are contextual
      *
-     * A filter with no context array (context-free) is considered to apply to all
-     * contexts — consistent with query-application semantics — so it covers every
-     * active context for the purpose of the strict coverage check.  That holds only for as
-     * long as it is applied: while a privileged context is contextual, context-free filters
-     * are skipped, and a filter that is not applied cannot stand in as coverage for anything.
-     * The remaining contexts are then censused as they always are, so a context that is
-     * contextual and named nowhere is still denied.
+     * Naming a context is how an entity declares the actors it serves, so naming is all that is
+     * looked for here, not what the filter goes on to do.  An ignore: true filter counts as much
+     * as one with a where clause, that being how an entity says the actor is unrestricted on it,
+     * and so does a filter FirstMatch never reaches, the entity having said who it serves either
+     * way.
+     *
+     * A context-free filter names nothing and so covers nothing.  It scopes whichever tenants an
+     * entity serves, and whether the restricted actor is one of them is the question being asked.
+     *
+     * @param FilterAttribute[] $filters
+     * @param string[] $restrictedContexts
+     */
+    private function hasRestrictedCoverage(array $filters, array $restrictedContexts): bool
+    {
+        foreach ($filters as $filter) {
+            assert($filter instanceof FilterAttribute);
+
+            if (count(array_intersect($filter->getContext(), $restrictedContexts))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+
+    /**
+     * Gets every active context that no filter's context array names
+     *
+     * These are the actors the entity has not declared, which it either denies or, being
+     * permissive, serves unrestricted.
+     *
+     * A filter with no context array (context-free) is considered to apply to all contexts,
+     * consistent with query-application semantics, so it covers every active context.  That
+     * holds only for as long as it is applied: while a privileged context is contextual,
+     * context-free filters are skipped, and a filter that is not applied cannot stand in as
+     * coverage for anything.  The remaining contexts are then censused as they always are, so a
+     * context that is contextual and named nowhere is still uncovered.
      *
      * Privileged providers are themselves excluded from the census, as ambient ones are.  An
      * actor outside of tenancy is not a scope the entity could have covered.
      *
      * @param FilterAttribute[] $filters
      * @param string[] $privilegedContexts
+     *
+     * @return string[]
      */
-    private function hasUncoveredContexts(array $filters, array $privilegedContexts): bool
+    private function getUncoveredContexts(array $filters, array $privilegedContexts): array
     {
         $coveredContexts = [];
         foreach ($filters as $filter) {
             if (!count($filter->getContext())) {
                 if (!count($privilegedContexts)) {
-                    return false;
+                    return [];
                 }
 
                 continue;
@@ -311,6 +398,7 @@ class ConditionResolver
             }
         }
 
+        $uncoveredContexts = [];
         foreach ($this->listener->getContextProviders() as $contextProvider) {
             if ($contextProvider instanceof AmbientContextProviderInterface) {
                 continue;
@@ -321,10 +409,10 @@ class ConditionResolver
             }
 
             if ($contextProvider->isContextual() && !isset($coveredContexts[$contextProvider->getIdentifier()])) {
-                return true;
+                $uncoveredContexts[] = $contextProvider->getIdentifier();
             }
         }
 
-        return false;
+        return $uncoveredContexts;
     }
 }

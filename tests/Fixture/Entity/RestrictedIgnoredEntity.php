@@ -5,20 +5,21 @@ declare(strict_types = 1);
 namespace Rentpost\Doctrine\MultiTenancy\Tests\Fixture\Entity;
 
 use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy;
+use Rentpost\Doctrine\MultiTenancy\Attribute\MultiTenancy\FilterStrategy;
 
 #[MultiTenancy(
-    strict: true,
+    strategy: FilterStrategy::FirstMatch,
     filters: [
         new MultiTenancy\Filter(
-            context: ['customer'],
-            where: '$this.id IN(SELECT book_id FROM customer_purchase WHERE customer_id = {customerId})',
+            context: ['visitor'],
+            ignore: true,
         ),
         new MultiTenancy\Filter(
-            context: ['publisher'],
-            where: '$this.publisher_id = {publisherId}',
+            context: ['visitor'],
+            where: '$this.store_id = {storeId}',
         ),
     ],
 )]
-class StrictNoContextFreeEntity
+class RestrictedIgnoredEntity
 {
 }

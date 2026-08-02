@@ -22,6 +22,20 @@ class Listener implements EventSubscriber
     private ?Filter $filter = null;
 
     /**
+     * Null until setPermissiveDefault() is called, which is what tells the two states that behave
+     * differently apart: a consumer that has chosen to stay permissive, and one that has not
+     * chosen at all.  Only the latter is deprecated, so the value alone cannot stand in for it.
+     */
+    private ?bool $permissiveDefault = null;
+
+    /**
+     * The entity and context pairs already reported, so that each is reported once
+     *
+     * @var array<string, true>
+     */
+    private array $reportedFallThroughs = [];
+
+    /**
      * Private so that setValue() stays the only way in, subclasses included
      *
      * @var array<string, string|null>
@@ -189,5 +203,73 @@ class Listener implements EventSubscriber
         }
 
         return $this->contextProviders[$key];
+    }
+
+
+    /**
+     * Sets what becomes of an actor an entity has not declared, for every entity declaring
+     * neither way itself
+     *
+     * True serves such an actor unrestricted, which is the 2.x default and preserves the
+     * behaviour of entities written before any of this.  False denies it, which is what an
+     * entity's filters read as declaring, and becomes the default in 3.0.  Call this during
+     * setup, before any query is built.
+     *
+     * Calling this at all is what silences the fall-through deprecation, whichever value is
+     * given.  An explicit true is a decision to stay permissive rather than a decision left
+     * unmade, and permissiveness itself is supported indefinitely.
+     */
+    public function setPermissiveDefault(bool $permissive): void
+    {
+        $this->permissiveDefault = $permissive;
+    }
+
+
+    /**
+     * Whether an actor an entity has not declared is served unrestricted, where the entity
+     * declares neither way itself
+     */
+    public function isPermissiveDefault(): bool
+    {
+        return $this->permissiveDefault ?? true;
+    }
+
+
+    /**
+     * Warns that an entity has been resolved permissively for the want of a decision, once for
+     * each entity and context pair
+     *
+     * What is deprecated is leaving the outcome to a default that is about to change, so calling
+     * setPermissiveDefault() silences this for good, and nothing is said about an entity that
+     * declares itself permissive.  The notices name what fell through and where, so that they
+     * read as the migration list, which is why they are emitted here rather than once at setup:
+     * only resolving an entity can find these.
+     *
+     * The record of what has been reported lives here, a new ConditionResolver being built for
+     * every query, so that a consumer gets a list rather than a line for every query it runs.
+     *
+     * @param class-string $entityClass
+     * @param string $context   The identifier of the context that fell through
+     */
+    public function deprecatePermissiveFallThrough(string $entityClass, string $context): void
+    {
+        if ($this->permissiveDefault !== null) {
+            return;
+        }
+
+        $pair = $entityClass . '::' . $context;
+        if (isset($this->reportedFallThroughs[$pair])) {
+            return;
+        }
+
+        $this->reportedFallThroughs[$pair] = true;
+
+        trigger_error(sprintf(
+            '%s resolved with no filter covering the active "%s" context. This currently grants ' .
+            'unrestricted access and will deny by default in 3.0. Declare a filter for it, or ' .
+            'call Listener::setPermissiveDefault() to make the choice explicit.',
+            $entityClass,
+            $context,
+        ), E_USER_DEPRECATED);
     }
 }
