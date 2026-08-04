@@ -27,8 +27,5 @@
         "psr-4": {
             "Rentpost\\Doctrine\\MultiTenancy\\Tests\\": "tests/"
         }
-    },
-    "scripts": {
-        "test": "phpunit"
     }
 }
